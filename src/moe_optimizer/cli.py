@@ -3,6 +3,7 @@
     moeopt econ                             parameter-economics tables
     moeopt audit-depth  MODEL [options]     gate G0: depth smoothness
     moeopt sweep        MODEL [options]     matched-budget Pareto sweep
+    moeopt calib        MODEL [options]     calibration statistics (F8)
 """
 
 from __future__ import annotations
@@ -70,6 +71,17 @@ def cmd_audit_depth(args) -> int:
 
     (out_dir / "depth_summary.json").write_text(json.dumps(summary, indent=2))
     print(f"\nwrote {out_dir}/depth_summary.json")
+    return 0
+
+
+def cmd_calib(args) -> int:
+    from .calib.run import run_calibration
+
+    run_calibration(
+        args.model, args.out, n_tokens=args.tokens, seq_len=args.seq_len, batch=args.batch,
+        cache_dir=args.cache_dir, layers=args.layers or None, max_batches=args.max_batches,
+        cpu_mem=args.cpu_mem or None, offload_dir=args.offload_dir or None,
+    )
     return 0
 
 
@@ -153,6 +165,19 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--points", default="", help="JSON file of explicit sweep points")
     s.add_argument("--calib", default="", help="calibration .pt from `calib/run.py`; enables whitening")
     s.set_defaults(fn=cmd_sweep)
+
+    k = sub.add_parser("calib", help="collect calibration statistics from a forward pass")
+    k.add_argument("model")
+    k.add_argument("--cache-dir", default=".cache")
+    k.add_argument("--out", required=True, help="output .pt")
+    k.add_argument("--tokens", type=int, default=32768)
+    k.add_argument("--seq-len", type=int, default=512)
+    k.add_argument("--batch", type=int, default=4)
+    k.add_argument("--layers", type=int, nargs="*", default=[])
+    k.add_argument("--max-batches", type=int, default=None)
+    k.add_argument("--cpu-mem", default="", help='e.g. "10GiB": enable disk offload for models > RAM')
+    k.add_argument("--offload-dir", default="")
+    k.set_defaults(fn=cmd_calib)
 
     args = p.parse_args(argv)
     return args.fn(args)

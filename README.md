@@ -115,6 +115,8 @@ a GPU (task benchmarks, latency, HBM) are deliberately not implemented here.
 moeopt econ                                     # parameter-economics tables
 moeopt audit-depth MODEL --rank 64              # gate G0: depth smoothness
 moeopt sweep MODEL --ranks 16 32 64 --max-layers 2   # matched-budget Pareto
+moeopt calib MODEL --out runs/calib.pt          # F8: calibration statistics
+moeopt sweep MODEL --calib runs/calib.pt ...    # whitened fit, scored by rel_act
 ```
 
 ---
