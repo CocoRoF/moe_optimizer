@@ -129,3 +129,23 @@ def test_rel_act_rewards_whitened_fit_on_anisotropic_input():
     r_wht = reconstruction_report(stack, wht, input_cov=cov)
     assert r_raw["rel_fro"] <= r_wht["rel_fro"] + 1e-9        # raw wins its own metric
     assert r_wht["rel_act"] < r_raw["rel_act"]                 # whitened wins the real one
+
+
+def test_write_slot_targets_the_right_half_of_fused_gate_up():
+    """gate -> first d_ff rows of gate_up_proj, up -> second, down -> down_proj."""
+    import torch.nn as nn
+    from moe_optimizer.eval.ppl import write_slot
+
+    class Fused(nn.Module):
+        def __init__(self, E=3, d_ff=4, d=5):
+            super().__init__()
+            self.intermediate_dim = d_ff
+            self.gate_up_proj = nn.Parameter(torch.zeros(E, 2 * d_ff, d))
+            self.down_proj = nn.Parameter(torch.zeros(E, d, d_ff))
+
+    f = Fused()
+    g, u, d = (torch.full((3, 4, 5), v) for v in (1.0, 2.0, 0.0)), None, torch.full((3, 5, 4), 3.0)
+    g, u = torch.full((3, 4, 5), 1.0), torch.full((3, 4, 5), 2.0)
+    write_slot(f, "gate", g); write_slot(f, "up", u); write_slot(f, "down", d)
+    assert torch.equal(f.gate_up_proj[:, :4], g) and torch.equal(f.gate_up_proj[:, 4:], u)
+    assert torch.equal(f.down_proj, d)

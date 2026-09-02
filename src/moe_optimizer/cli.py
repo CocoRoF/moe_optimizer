@@ -14,6 +14,8 @@ from pathlib import Path
 
 import torch
 
+from .calib.stats import slot_stats
+
 
 def _store(args):
     from .io.checkpoint import ExpertStore, resolve_model
@@ -93,7 +95,7 @@ def cmd_sweep(args) -> int:
             slot = Slot(layer, matrix)
             print(f"\n=== {slot} ===")
             stack = store.stack(slot)
-            stats = _slot_stats(calib, layer, matrix) if calib is not None else None
+            stats = slot_stats(calib, layer, matrix) if calib is not None else None
             imp = stats["importance"] if stats else None
             all_results += sweep_slot(stack, str(slot), points, stats=stats, importance=imp)
             del stack
@@ -106,24 +108,6 @@ def cmd_sweep(args) -> int:
         print(f"  {r.method:<20} ratio={r.ratio:.4f}  {metric}={r.error[metric]:.5f}  {r.params}")
     print(f"\nwrote {out_dir}/sweep.jsonl")
     return 0
-
-
-def _slot_stats(calib: dict, layer: int, matrix: str) -> dict:
-    """Per-slot statistics for the compressors.
-
-    gate/up read the residual stream, so their input covariance is the layer's
-    residual second moment.  down reads the intermediate activation, whose full
-    covariance was not collected (see calib/hooks.py); it gets the diagonal,
-    pooled over experts, which whitens scale but not direction.
-    """
-    st = calib[layer]
-    if matrix in ("gate", "up"):
-        cov = st["input_cov"]
-    else:
-        cov = torch.diag(st["inter_sq"].mean(0))
-    return {"input_cov": cov, "importance": st["importance"],
-            "counts": st["counts"], "coactivation": st["coactivation"],
-            "n_tokens": st["n_tokens"]}
 
 
 def _default_points(args) -> list[dict]:
