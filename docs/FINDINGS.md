@@ -2,6 +2,22 @@
 
 Every number here is reproducible from this repo on CPU. Commands are given.
 
+| # | finding | model | verdict |
+|---|---|---|---|
+| F1 | A chart on the expert coordinate is bounded by E/(E+D) < 0.1% of the code | all (arithmetic) | closed |
+| F1b | Expert weights are near full rank in weight space | OLMoE | superseded by F10 (wrong metric) |
+| F2 | Cross-layer structure lives only in the residual-stream-facing mode, 3/3 | OLMoE | stands |
+| F3 | Diagonal coupling needs joint diagonalisation, not HOSVD | synthetic | design rule |
+| F4 | Coefficients must be fitted against decoder-generated factors | synthetic | design rule |
+| F5 | Sharing ≤ per-expert SVD; weight-cosine clustering ≡ null | OLMoE | superseded by F10 (wrong metric) |
+| F6 | Adjacent-layer dictionaries share no directions (union rank 128/128) | OLMoE | depth chart falsified |
+| F7 | Neurons have no near-duplicates (NN median 0.19, chance 0.12) | OLMoE | neuron codebook closed (raw) |
+| F8 | Calibration statistics; anisotropy moderate (eff. rank 544–905/2048) | OLMoE | tool + pre-registration |
+| F9 | Whitened: NN median 0.38, still 128/128 union rank | OLMoE | branch 2 |
+| F10 | Whitened, scored by output error: per-expert SVD beats all sharing; clustering ≡ null to 4 dp | OLMoE | **every sharing axis closed** |
+| F11 | Stronger, longer-range depth structure in middle layers; still no shared directions or duplicate neurons | Qwen3-30B | model matters; mechanism narrow |
+| F11a | Depth anchor + correction saves 30–33% of one dictionary side, middle band, pre-whitening | Qwen3-30B | real, small |
+
 ---
 
 ## F1 — A chart on the expert coordinate cannot compress
