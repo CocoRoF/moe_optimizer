@@ -304,3 +304,50 @@ expert axis (cannot compress) or on the depth axis (nothing smooth enough to
 chart). What remains of it is the nested-truncation property, and rank
 truncation is nested in any orthonormal factorisation — including plain SVD —
 so that is not a contribution either.
+
+---
+
+## F7 — Neurons have no near-duplicates in weight space
+
+```bash
+python3 scripts/neuron_nn.py
+```
+
+The finest unit with no remaining symmetry is a neuron: its (gate row, up row,
+down column) triple is fully identified, so cross-expert and cross-layer
+comparison needs no alignment.  If most neurons had a close twin somewhere in
+the model, a shared prototype pool could approximate every expert by indexing.
+This was the pre-registered test for that idea, with the kill condition "median
+nearest-neighbour cosine < 0.3".
+
+OLMoE-1B-7B, all 1,048,576 gate rows (16 layers x 64 experts x 1024), 8,000
+random queries against the full set.  Random-vector baseline for NN cosine at
+this N and d is ~0.116.
+
+| | p10 | p25 | **p50** | p75 | p90 | p99 |
+|---|---:|---:|---:|---:|---:|---:|
+| nearest neighbour, any | 0.119 | 0.141 | **0.191** | 0.269 | 0.370 | 0.597 |
+| nearest neighbour, other layers only | 0.113 | 0.126 | 0.172 | 0.243 | 0.331 | 0.544 |
+
+Fraction with NN cosine > 0.5: **2.8%**. > 0.7: 0.2%. > 0.9: **0.0%**.
+The NN lands in the same layer 51.8% of the time and in the same expert 21.9% --
+a mild preference over the 6.25% / 0.1% that chance would give, so what little
+structure exists is local.
+
+**Verdict: the neuron-codebook direction is dead in weight space.** Median NN
+cosine 0.191 is 1.6x the random baseline; nothing is near-duplicate.
+
+### The pattern across F1b, F6, F7
+
+Three probes at three granularities -- whole-layer subspace, individual expert
+rank structure, individual neuron -- all say the same thing: **OLMoE-1B-7B has
+essentially no redundancy in raw weight space.**  This is consistent with
+LorExperts' "near-orthogonal in raw weight space" and with arXiv:2606.03465's
+power-law spectra.
+
+Every one of those probes was measured in the metric arXiv:2606.03465 says is
+the wrong one.  Two rows with raw cosine 0.2 can have pre-activations that
+correlate at 0.9 if the input covariance is anisotropic enough -- whitened
+cosine *is* pre-activation correlation.  That is the mechanism behind every
+successful training-free method (GPTQ, AWQ, SVD-LLM), and it has not been
+measured here yet.  It is the last door, and `calib/` exists to open it.
