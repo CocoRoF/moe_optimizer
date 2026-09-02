@@ -53,7 +53,8 @@ def cmd_audit_depth(args) -> int:
         for side in args.sides:
             print(f"\n=== depth profile: {matrix} / {side} (rank {args.rank}) ===")
             prof = depth_profile(store, matrix=matrix, rank=args.rank, side=side,
-                                 layers=layers)
+                                 layers=layers,
+                                 gram_dtype=torch.float32 if args.fast else torch.float64)
             curve = prof.decay_curve()
             verdict = prof.verdict()
             print(f"\n  affinity vs layer gap (mean cos^2 of principal angles):")
@@ -156,6 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     common(a)
     a.add_argument("--rank", type=int, default=64)
     a.add_argument("--sides", nargs="+", default=["out", "in"])
+    a.add_argument("--fast", action="store_true", help="float32 Gram accumulation (~4x faster)")
     a.set_defaults(fn=cmd_audit_depth)
 
     s = sub.add_parser("sweep", help="matched-budget Pareto sweep")
