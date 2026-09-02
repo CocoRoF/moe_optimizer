@@ -94,3 +94,26 @@ def test_byte_accounting_beats_dense():
     code = DepthAtlas(rank=R, degree=4).fit(st)
     assert code.ratio() < 1.0
     assert abs(sum(code.component_bytes.values()) - code.nbytes) < 1e-6
+
+
+def test_float32_gram_matches_float64_subspace():
+    """--fast must not change the G0 verdict: same top subspace to ~1e-5.
+
+    The planted spectrum has a clear gap after rank 6.  With a near-degenerate
+    spectrum (i.i.d. random rows) the top-6 subspace is ill-defined and rotates
+    between precisions, which would test the data rather than the code.
+    """
+    from moe_optimizer.geometry.subspace import subspace_affinity
+    g = torch.Generator().manual_seed(3)
+    basis = torch.linalg.qr(torch.randn(56, 6, generator=g, dtype=torch.float64))[0]
+    ws = [torch.randn(40, 6, generator=g, dtype=torch.float64) * 10.0 @ basis.T
+          + 0.1 * torch.randn(40, 56, generator=g, dtype=torch.float64)
+          for _ in range(8)]
+
+    def dict_(dtype):
+        gram = torch.zeros(56, 56, dtype=dtype)
+        for w in ws:
+            w = w.to(dtype); gram += w.T @ w
+        return torch.linalg.eigh(gram.to(torch.float64))[1].flip(1)[:, :6]
+
+    assert abs(1.0 - subspace_affinity(dict_(torch.float64), dict_(torch.float32))) < 1e-5
