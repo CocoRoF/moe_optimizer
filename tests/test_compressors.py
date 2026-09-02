@@ -182,3 +182,15 @@ def test_compressed_dir_round_trips_into_a_fused_module(tmp_path):
     load_compressed_into(m, str(tmp_path), verbose=False)
     assert torch.equal(m.model.layers[0].mlp.experts.gate_up_proj[:, 3:], up)
     assert torch.equal(m.model.layers[0].mlp.experts.gate_up_proj[:, :3], torch.zeros(2, 3, 4))
+
+
+def test_slot_stats_uses_full_intermediate_cov_for_down_when_present():
+    from moe_optimizer.calib.stats import slot_stats
+    E, d, f = 4, 6, 5
+    base = {"input_cov": torch.eye(d, dtype=torch.float64) * 2, "importance": torch.ones(E) / E,
+            "counts": torch.ones(E, dtype=torch.long), "coactivation": torch.zeros(E, E, dtype=torch.long),
+            "n_tokens": 10, "inter_sq": torch.full((E, f), 3.0, dtype=torch.float64)}
+    full = torch.eye(f, dtype=torch.float64) * 9 + 1
+    assert torch.equal(slot_stats({0: base}, 0, "gate")["input_cov"], base["input_cov"])
+    assert torch.equal(slot_stats({0: base}, 0, "down")["input_cov"], torch.eye(f, dtype=torch.float64) * 3)
+    assert torch.equal(slot_stats({0: {**base, "inter_cov": full}}, 0, "down")["input_cov"], full)
