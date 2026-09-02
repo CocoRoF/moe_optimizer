@@ -40,20 +40,22 @@ qidx = torch.randperm(N)[:Q]
 q = rows[qidx].float()
 best = torch.full((Q,), -2.0); best_j = torch.zeros(Q, dtype=torch.long)
 best_xlayer = torch.full((Q,), -2.0)      # best NN restricted to OTHER layers
-CH = 65536
+# Chunk small enough that sim (Q x CH fp32) stays ~0.5 GB, and never copy it:
+# the cross-layer max is taken by masking the same buffer in place.
+CH = 16384
+qlayer = layer_of[qidx].unsqueeze(1)
 t0 = time.time()
 for s in range(0, N, CH):
     c = rows[s:s + CH].float()
     sim = q @ c.T                                       # (Q, CH)
-    # exclude self
-    self_mask = (qidx.unsqueeze(1) == torch.arange(s, s + c.shape[0]).unsqueeze(0))
-    sim[self_mask] = -2.0
+    idx = torch.arange(s, s + c.shape[0])
+    sim[qidx.unsqueeze(1) == idx.unsqueeze(0)] = -2.0   # exclude self
     m, j = sim.max(1)
     upd = m > best; best[upd] = m[upd]; best_j[upd] = j[upd] + s
-    other = layer_of[s:s + c.shape[0]].unsqueeze(0) != layer_of[qidx].unsqueeze(1)
-    sim_x = torch.where(other, sim, torch.tensor(-2.0))
-    mx = sim_x.max(1).values
+    sim.masked_fill_(layer_of[s:s + c.shape[0]].unsqueeze(0) == qlayer, -2.0)
+    mx = sim.max(1).values
     updx = mx > best_xlayer; best_xlayer[updx] = mx[updx]
+    del sim, c
 print(f"NN search {time.time()-t0:.0f}s", flush=True)
 
 same_layer = layer_of[best_j] == layer_of[qidx]
