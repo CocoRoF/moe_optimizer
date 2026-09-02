@@ -245,3 +245,62 @@ every method is already broken. The regime that matters is 40-80%.
 Taken with F1b, the priority is clear: **calibration statistics and whitening
 come before any further method work.** Until the error metric is
 activation-weighted, this sweep cannot distinguish a bad method from a bad metric.
+
+---
+
+## F6 — The depth axis does not yield a shared-basis saving
+
+Two measurements run to test the depth-chart proposal from F2, on OLMoE-1B-7B
+`gate`, residual-stream side, before building anything further on it.
+
+### F6a — adjacent dictionaries share no directions
+
+Union rank of `[U_l | U_{l+1}]`, rank-64 bases each. A concatenation singular
+value below 0.1 means a principal angle under ~8°, i.e. a direction one layer
+could borrow from the next.
+
+| pair | union rank (sv > 0.1) | saving |
+|---|---:|---:|
+| layers 4,5 | 128 / 128 | **0%** |
+| layers 5,6 | 128 / 128 | **0%** |
+| layers 6,7 | 128 / 128 | **0%** |
+
+4-layer window (256 columns): 256 kept at sv > 0.1; 226 at > 0.3 (angle > 26°);
+159 at > 0.5 (angle > 41°).
+
+**Not one principal angle between adjacent layers is below 8°.** The mean cos²
+of 0.5-0.6 reported in F2 is produced by *many* directions being moderately
+aligned (30-60°), not by *some* directions being shared and the rest orthogonal.
+That is the one regime where neither mechanism helps: a shared basis needs
+near-zero angles, and a polynomial chart needs a rotation small enough to
+interpolate — 45° per layer of a 64-dim subspace in 2048 dims is not that.
+
+### F6b — the signal washes out at the ranks reconstruction needs
+
+Gap-1 affinity, layers 5→6:
+
+| rank | affinity | chance (r/2048) | signal / chance |
+|---:|---:|---:|---:|
+| 64 | 0.589 | 0.031 | **18.9×** |
+| 256 | 0.600 | 0.125 | 4.8× |
+| 512 | 0.607 | 0.250 | **2.4×** |
+
+Absolute affinity is flat; chance rises with rank. The cross-layer structure is
+concentrated in the top few dozen directions. F1b says useful reconstruction
+needs rank in the hundreds, and at those ranks the residual-side dictionaries are
+barely above what two random subspaces would show.
+
+### Verdict
+
+F2 stands as a geometric observation — the residual-stream/neuron split is real,
+3/3, and far above chance at low rank. **As a compression mechanism the depth
+axis is falsified**, by the same instrument that found it, one turn after it was
+proposed. The depth-chart method (`methods/depth_atlas.py`) is retained as an
+ablation arm and as the record of a tested-and-rejected idea; it is not a
+direction.
+
+With F1 and F6 together: the orthogonal-polynomial idea does not survive on the
+expert axis (cannot compress) or on the depth axis (nothing smooth enough to
+chart). What remains of it is the nested-truncation property, and rank
+truncation is nested in any orthonormal factorisation — including plain SVD —
+so that is not a contribution either.
