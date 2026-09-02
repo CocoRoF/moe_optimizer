@@ -14,17 +14,20 @@ from moe_optimizer.io.checkpoint import ExpertStore, resolve_model
 from moe_optimizer.types import Slot
 
 torch.manual_seed(0)
-st = ExpertStore(resolve_model("allenai/OLMoE-1B-7B-0924", cache_dir=".cache", allow_download=False),
+MODEL = sys.argv[1] if len(sys.argv) > 1 else "allenai/OLMoE-1B-7B-0924"
+STRIDE = int(sys.argv[2]) if len(sys.argv) > 2 else 1      # take every STRIDE-th MoE layer
+st = ExpertStore(resolve_model(MODEL, cache_dir=".cache", allow_download=False),
                  dtype=torch.float32)
 A = st.arch
-L, E, D = len(A.moe_layers), A.n_experts, A.d_expert
+LAYERS = list(A.moe_layers)[::STRIDE]
+L, E, D = len(LAYERS), A.n_experts, A.d_expert
 N = L * E * D
-print(f"{N:,} gate rows of dim {A.d_model}; random-NN baseline ~{math.sqrt(2*math.log(N)/A.d_model):.3f}", flush=True)
+print(f"{MODEL}: {L} of {len(A.moe_layers)} layers (stride {STRIDE}), {N:,} gate rows of dim {A.d_model}; random-NN baseline ~{math.sqrt(2*math.log(N)/A.d_model):.3f}", flush=True)
 
 rows = torch.empty((N, A.d_model), dtype=torch.float16)
 layer_of = torch.empty(N, dtype=torch.int16); expert_of = torch.empty(N, dtype=torch.int16)
 t0 = time.time()
-for li, l in enumerate(A.moe_layers):
+for li, l in enumerate(LAYERS):
     for e in range(E):
         w = st.expert(Slot(l, "gate"), e)
         w = w / w.norm(dim=1, keepdim=True).clamp_min(1e-8)
@@ -56,7 +59,7 @@ print(f"NN search {time.time()-t0:.0f}s", flush=True)
 same_layer = layer_of[best_j] == layer_of[qidx]
 same_expert = same_layer & (expert_of[best_j] == expert_of[qidx])
 def qs(x): return " ".join(f"p{p}={x.quantile(p/100):.3f}" for p in (10, 25, 50, 75, 90, 99))
-print("\n=== nearest-neighbour cosine, gate rows, OLMoE-1B-7B ===")
+print(f"\n=== nearest-neighbour cosine, gate rows, {MODEL} ===")
 print(f"overall            : {qs(best)}")
 print(f"cross-layer only   : {qs(best_xlayer)}")
 print(f"NN is in same layer : {same_layer.float().mean()*100:.1f}%   same expert: {same_expert.float().mean()*100:.1f}%")

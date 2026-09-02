@@ -78,7 +78,10 @@ class CalibrationCollector:
         self._handles = []
         for l in layers:
             blk = model.model.layers[l].mlp
-            st = SlotStats(l, cfg.num_experts, cfg.hidden_size, cfg.intermediate_size)
+            # Qwen-MoE keeps the dense FFN width in intermediate_size and the expert
+            # width in moe_intermediate_size; OLMoE has only the former.
+            d_ff = getattr(cfg, "moe_intermediate_size", None) or cfg.intermediate_size
+            st = SlotStats(l, cfg.num_experts, cfg.hidden_size, d_ff)
             self.slots[l] = st
             self._handles.append(blk.experts.register_forward_pre_hook(self._make_hook(st, blk)))
 

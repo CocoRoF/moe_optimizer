@@ -21,8 +21,9 @@ from moe_optimizer.types import Slot
 
 torch.manual_seed(0)
 calib = torch.load(sys.argv[1] if len(sys.argv) > 1 else "runs/calib_olmoe_32k.pt")
+MODEL = sys.argv[2] if len(sys.argv) > 2 else calib.get("model", "allenai/OLMoE-1B-7B-0924")
 stats = calib["layers"]
-st = ExpertStore(resolve_model("allenai/OLMoE-1B-7B-0924", cache_dir=".cache", allow_download=False),
+st = ExpertStore(resolve_model(MODEL, cache_dir=".cache", allow_download=False),
                  dtype=torch.float32)
 A = st.arch
 L, E, D, d = len(A.moe_layers), A.n_experts, A.d_expert, A.d_model
@@ -30,7 +31,7 @@ print(f"calibration: {calib['n_tokens']:,} tokens over {len(stats)} layers", flu
 
 # --- 0. how anisotropic is the residual stream?  (this is what makes F9 differ from F7)
 print("\n=== residual-stream covariance anisotropy ===")
-for l in (0, 4, 8, 12, 15):
+for l in sorted(stats)[:: max(1, len(stats) // 5)]:
     ev = torch.linalg.eigvalsh(stats[l]["input_cov"]).flip(0).clamp_min(0); p = ev / ev.sum()
     print(f"  layer {l:>2}: top-1 {p[0]:.3f}  top-16 {p[:16].sum():.3f}  top-128 {p[:128].sum():.3f}  "
           f"eff-rank {float(torch.exp(-(p*torch.log(p+1e-30)).sum())):5.0f} / {d}")
@@ -77,8 +78,10 @@ def wdict(l, r):
         w = (st.expert(Slot(l, "gate"), e) @ Lt).double(); g += w.T @ w
     return torch.linalg.eigh(g)[1].flip(1)[:, :r].contiguous()
 r = 64
-B = {l: wdict(l, r) for l in (4, 5, 6, 7)}
-for a, b in ((4,5),(5,6),(6,7)):
+mid = A.moe_layers[len(A.moe_layers) // 4]
+pairs = [(mid + i, mid + i + 1) for i in range(3)]
+B = {l: wdict(l, r) for l in sorted({x for pr in pairs for x in pr})}
+for a, b in pairs:
     aff = subspace_affinity(B[a], B[b]); sv = torch.linalg.svdvals(torch.cat([B[a], B[b]], 1))
     print(f"  layers {a},{b}: affinity {aff:.3f} (raw was ~0.51)   union rank(>0.1) {int((sv>0.1).sum())}/128   angles<8deg: {128-int((sv>0.1).sum())}")
 print("DONE")
