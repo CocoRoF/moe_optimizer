@@ -351,3 +351,36 @@ correlate at 0.9 if the input covariance is anisotropic enough -- whitened
 cosine *is* pre-activation correlation.  That is the mechanism behind every
 successful training-free method (GPTQ, AWQ, SVD-LLM), and it has not been
 measured here yet.  It is the last door, and `calib/` exists to open it.
+
+---
+
+## F8 — Calibration statistics (OLMoE-1B-7B, 32,768 tokens, WikiText-2)
+
+`calib/run.py`, 26.5 tok/s on CPU beside the bf16 model, 21 minutes. Per layer:
+residual-stream second moment (2048×2048), routing counts, gate mass,
+co-activation, per-neuron intermediate second moments. 521 MB.
+
+Residual-stream anisotropy — the quantity that decides how far activation-space
+similarity can diverge from weight-space:
+
+| layer | top-1 | top-16 | top-128 | eff. rank / 2048 |
+|---:|---:|---:|---:|---:|
+| 0 | 0.085 | 0.221 | 0.456 | 676 |
+| 4 | 0.071 | 0.186 | 0.386 | 905 |
+| 8 | 0.081 | 0.205 | 0.421 | 803 |
+| 12 | 0.082 | 0.242 | 0.468 | 685 |
+| 15 | 0.121 | 0.287 | 0.506 | 544 |
+
+Moderate. No massive-activation spike (top-1 ≤ 0.12 everywhere); the top 128
+directions carry 39–51% of variance and the effective rank is a quarter to a
+half of the ambient dimension.
+
+### Pre-registered prediction for F9 (written before the numbers)
+
+Whitening reweights by the eigen-spectrum above. With this much spread it will
+*shift* the F7 distribution but cannot collapse a 2048-dim space onto a few
+directions. Prediction: whitened neuron-NN median rises from 0.191 to
+**0.25–0.35**, not to the 0.7+ a codebook would need; fraction above 0.9 stays
+under 1%. Adjacent-layer union rank stays near 128/128. If F9 beats this
+prediction substantially — median above 0.5 — activation space has structure
+weight space hid and branch 1 of REDESIGN §5.2 is live. If it matches, branch 2.
