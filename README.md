@@ -218,11 +218,14 @@ structure (gap-1 affinity 0.55-0.77, reproducing ConMoE's middle-layer effect)
 but still zero shared directions and zero duplicate neurons. A depth anchor
 with low-rank correction would save 30-33% of one side's dictionary in that
 band, before whitening -- real, small, and the only lever with measured
-support. F12: whitened per-expert SVD at 75% size takes OLMoE from 11.06 to 18.03
-perplexity (x1.63) -- not usable -- with `down` carrying the most error
-because its input was whitened by diagonal only; re-measured as F12b with the
-full intermediate covariance. Open: the whitened Qwen3 re-run, which needs
-disk-offload calibration. Task
+support. F12/F12b: whitened per-expert SVD takes OLMoE from 11.06 to 17.9 perplexity
+at 75% size and to 27.4 at 56%; whitening `down` with its full covariance
+changes nothing. Low-rank compression is closed on this model, sharing or
+not. Qwen3 in activation space (F9-Qwen3): neuron-NN median 0.404 against a
+pre-registered gate of 0.5; 1-2 shared directions of 64 in the middle band.
+Branch 2 on both models. The one measured lever is a depth anchor with
+low-rank correction on the residual-facing dictionary in Qwen3's middle
+layers (F11a, whitened). Task
 benchmarks and system measurements need a GPU and are out of scope here.
 
 ---

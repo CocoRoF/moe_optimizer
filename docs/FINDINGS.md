@@ -18,7 +18,8 @@ Every number here is reproducible from this repo on CPU. Commands are given.
 | F11 | Stronger, longer-range depth structure in middle layers; still no shared directions or duplicate neurons | Qwen3-30B | model matters; mechanism narrow |
 | F11a | Depth anchor + correction saves 30–33% of one dictionary side, middle band, pre-whitening | Qwen3-30B | real, small |
 | F11b | Residual/neuron split replicates 3/3; neuron side at chance to 3 dp | Qwen3-30B | **F2 is a two-model result** |
-| F12 | Whitened per-expert SVD at 75%: perplexity 11.06 → 18.03; `down` carries the error (diagonal-only whitening) | OLMoE | contaminated; re-measured as F12b |
+| F12 / F12b | Whitened per-expert SVD: ×1.62 at 75%, ×2.47 at 56%; full `down` covariance changes nothing | OLMoE | **low-rank closed, sharing or not** |
+| F8/F9-Qwen3 | Whitened neuron-NN median 0.404 (gate 0.5, predicted 0.45–0.50); 1–2 shared directions of 64 in the middle band | Qwen3-30B | **branch 2 on both models** |
 
 ---
 
@@ -735,3 +736,85 @@ stream; the private intermediate space carries none.
 
 F2 is now a two-model result and stands as the cleanest finding of the audit,
 independent of whether any compression mechanism ever comes of it.
+
+---
+
+## F12-56 / F12b — Perplexity curve, and a diagnosis falsified
+
+| point | expert-table ratio | `down` whitening | perplexity | × baseline |
+|---|---:|---|---:|---:|
+| baseline | 1.000 | — | 11.060 | 1.00 |
+| whitened SVD r=384 | 0.562 | diagonal | **27.364** | **2.47** |
+| whitened SVD r=512 (F12) | 0.750 | diagonal | 18.027 | 1.63 |
+| whitened SVD r=512 (F12b) | 0.750 | **full (d_ff × d_ff)** | **17.935** | **1.62** |
+
+**My F12 diagnosis was wrong.** I attributed the ×1.63 to whitening `down` by
+diagonal only; with the full pooled intermediate covariance the number moves by
+0.09 — nothing. `down` carries the most error because it is genuinely the
+hardest of the three matrices to approximate at low rank, not because of a
+calibration shortcut. F12 stands as measured: **training-free whitened
+per-expert SVD is not usable on OLMoE-1B-7B at 75% (×1.62) and is destructive
+at 56% (×2.47).** With F10 having shown that no sharing method beats per-expert
+SVD, this closes structural low-rank compression on this model outright, not
+just the sharing variants.
+
+---
+
+## F8-Qwen3 — calibration through disk offload
+
+32,768 tokens, 48 layers, `--cpu-mem 10GiB`: **11.3 tok/s, 48 min** (predicted
+8–11). Includes `inter_cov`. Residual-stream anisotropy is far stronger than
+OLMoE's at the ends: layer 0 has top-1 eigenvalue share **0.327** and effective
+rank **135**/2048 (OLMoE layer 0: 0.085, 676); middle layers 540–670; layer 45
+373. That layer-0 spike is the massive-activation signature OLMoE lacked.
+
+---
+
+## F9-Qwen3 — Activation space on Qwen3: the pre-registered gate is not met
+
+Pre-registered (F11): whitened neuron-NN median **0.45–0.50**; branch-1 gate
+median > 0.5.
+
+| | p10 | p25 | **p50** | p75 | p90 | p99 |
+|---|---:|---:|---:|---:|---:|---:|
+| Qwen3 raw (F11) | 0.134 | 0.182 | 0.260 | 0.346 | 0.421 | 0.556 |
+| **Qwen3 whitened** | 0.258 | 0.317 | **0.404** | 0.515 | 0.618 | 0.779 |
+| OLMoE whitened (F9) | 0.256 | 0.304 | 0.384 | 0.483 | 0.577 | 0.754 |
+
+Fraction > 0.5: 27.8%; > 0.7: 3.7%; > 0.9: **0.1%**. Median 0.404 is *below*
+the prediction band and well below the gate. In activation space Qwen3's
+neurons look almost exactly like OLMoE's (0.404 vs 0.384). **The neuron
+codebook is closed on both models in both metrics.**
+
+Whitened adjacent-layer dictionaries, middle band (gate/in):
+
+| pair | affinity raw → whitened | union rank (sv > 0.1) | angles < 8° |
+|---|---|---:|---:|
+| 12,13 | ~0.68 → **0.776** | 127/128 | **1** |
+| 13,14 | ~0.55 → **0.743** | 127/128 | **1** |
+| 14,15 | ~0.69 → **0.825** | 126/128 | **2** |
+
+The first hard-shared directions anywhere in this audit — 1–2 of 64 per pair,
+i.e. 2–3%. Not a shared basis. But the soft overlap is now high (0.74–0.83),
+which is what decides the anchor-plus-correction rank:
+
+### F11a whitened — the one lever, measured in the right metric
+
+| band | pair | outside energy | correction rank @90% (raw → **whitened**) | saving if anchored |
+|---|---|---:|---:|---:|
+| early | 2→3 | 0.503 | 52 → **48** | 25% |
+| middle | 16→17 | 0.163 | 43 → **46** | 28% |
+| middle | 23→24 | 0.174 | 45 → **43** | 33% |
+| middle | 30→31 | 0.147 | 44 → **45** | 30% |
+| late | 44→45 | 0.159 | 45 → **41** | 36% |
+
+### Verdict
+
+By the pre-registered rules, **branch 2 on Qwen3 as well.** Across two models
+(OLMoE-1B-7B, Qwen3-30B-A3B), two metrics (weight space, activation space) and
+three granularities (layer subspace, expert, neuron), no training-free
+cross-expert or cross-neuron sharing mechanism has support, and on OLMoE even
+non-sharing low-rank is destructive (F12). The residual/neuron split (F2) is a
+clean two-model mechanistic result. The only lever with measured support is the
+depth anchor + low-rank correction on the residual-facing dictionary in Qwen3's
+middle band, whose whitened saving is the table above.
