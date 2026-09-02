@@ -582,6 +582,16 @@ low-rank correction for layer l+1. ### F11a — rank of the depth correction (ga
 Read this against F1: the dictionary is the only term that matters, and this
 is the saving on one side of it, per adjacent pair, before whitening.
 
+**How to read it.** The middle band leaves only ~24% of the next layer's
+dictionary energy outside the current one — but that 24% is spread across so
+many directions that capturing 90% of it still costs rank 43–45 of 64. So a
+depth anchor with a low-rank correction saves **30–33% of one side's dictionary,
+in the middle ~30 layers, on the residual-facing mode only**, and 16–22% at the
+ends. That is the same diffuse-overlap signature F6a found on OLMoE, at higher
+amplitude. It is a real lever and a small one: it cannot produce a headline
+compression ratio, and it must survive the whitened re-measurement (F9-Qwen3)
+before it is anything more than a geometry observation.
+
 ### F7 on Qwen3 (raw, 12 of 48 layers, 1.18M gate rows)
 
 | | p10 | p25 | **p50** | p75 | p90 | p99 |

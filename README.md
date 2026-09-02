@@ -212,8 +212,14 @@ directions. Cross-neuron (F7, F9): whitened NN median 0.38, 0.1% above 0.9.
 Cross-expert (F10, whitened, scored by output error): per-expert SVD beats
 every sharing method, and functional clustering ties an arbitrary grouping to
 four decimals. Whitened per-expert SVD at 75% size gives 15.6% output error
-with no sharing assumptions. Open: whether OLMoE is simply the wrong testbed --
-the Qwen3-30B-A3B re-run of the same probes is in progress. Task
+with no sharing assumptions. Qwen3-30B-A3B (F11): the residual/neuron split
+replicates; its middle ~30 layers show stronger, longer-range cross-layer
+structure (gap-1 affinity 0.55-0.77, reproducing ConMoE's middle-layer effect)
+but still zero shared directions and zero duplicate neurons. A depth anchor
+with low-rank correction would save 30-33% of one side's dictionary in that
+band, before whitening -- real, small, and the only lever with measured
+support. Open: F12 (perplexity of whitened SVD on OLMoE) and the whitened
+Qwen3 re-run, which needs disk-offload calibration. Task
 benchmarks and system measurements need a GPU and are out of scope here.
 
 ---
