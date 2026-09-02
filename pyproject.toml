@@ -1,0 +1,33 @@
+[project]
+name = "moe-optimizer"
+version = "0.1.0"
+description = "Training-free structural compression of pretrained Mixture-of-Experts LLMs"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.4",
+    "safetensors>=0.4",
+    "huggingface_hub>=0.24",
+    "numpy>=1.26",
+    "scipy>=1.11",
+]
+
+[project.optional-dependencies]
+eval = ["transformers>=4.44", "datasets>=2.20", "lm-eval>=0.4"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+moeopt = "moe_optimizer.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

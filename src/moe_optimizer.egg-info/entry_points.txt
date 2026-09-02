@@ -1,0 +1,2 @@
+[console_scripts]
+moeopt = moe_optimizer.cli:main

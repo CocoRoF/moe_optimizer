@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: moe-optimizer
+Version: 0.1.0
+Summary: Training-free structural compression of pretrained Mixture-of-Experts LLMs
+Requires-Python: >=3.11
+Requires-Dist: torch>=2.4
+Requires-Dist: safetensors>=0.4
+Requires-Dist: huggingface_hub>=0.24
+Requires-Dist: numpy>=1.26
+Requires-Dist: scipy>=1.11
+Provides-Extra: eval
+Requires-Dist: transformers>=4.44; extra == "eval"
+Requires-Dist: datasets>=2.20; extra == "eval"
+Requires-Dist: lm-eval>=0.4; extra == "eval"
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"

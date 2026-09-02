@@ -1,0 +1,179 @@
+# moe_optimizer
+
+Training-free structural compression of pretrained Mixture-of-Experts LLMs.
+
+The goal is to re-represent the expert weight table of an **already-trained** MoE
+so that a serving system does not have to hold every expert in memory — without
+retraining, without deleting or merging experts, and without touching the router.
+
+Research context, prior-art survey and the falsification gates live in
+[`../my_paper/`](../my_paper/). Read
+`REVIEW_and_REDIRECTION_2026-09-02.md` first: it contains the finding that set
+the current direction.
+
+---
+
+## The finding this repo is built around
+
+The original design placed an orthogonal-polynomial (Legendre) chart on the
+**expert-mode coordinate** — compressing the per-expert coefficient table.
+
+That cannot work, and the reason is arithmetic rather than empirical. Every
+"shared dictionary + per-expert coefficients" scheme stores
+
+```
+per-expert = E · K          shared = K · D          D ≫ E
+```
+
+so the per-expert share of the code is `E / (E + D)`, independent of rank and of
+method. Measured on real configurations:
+
+| model | E | D | per-expert share | saving from charting it |
+|---|---:|---:|---:|---:|
+| OLMoE-1B-7B | 64 | 262,144 | 0.024% | 0.008% |
+| Qwen3-30B-A3B | 128 | 147,456 | 0.087% | 0.026% |
+| DeepSeekMoE-16B | 64 | 495,616 | 0.013% | 0.006% |
+| Mixtral-8x7B | 8 | 51,380,224 | 0.000% | −0.000% |
+
+Reproduce with `moeopt econ`. The claim is also pinned as an executable
+assertion in `tests/test_compressors.py::test_expert_chart_saving_is_negligible`.
+
+**Consequence.** On the expert axis a polynomial chart is a *regulariser* and a
+*progressive code*, never a compressor. The compression lever is the **depth
+axis**, where the dictionary is replicated L times (16 for OLMoE, 48 for
+Qwen3-30B-A3B) and where — unlike the expert index — a genuine total order exists.
+
+---
+
+## What has been measured so far
+
+`moeopt audit-depth allenai/OLMoE-1B-7B-0924` — all three matrix types, rank 64.
+Affinity is mean cos² of principal angles between two layers' dictionaries.
+
+| matrix | mode | faces | gap 1 | gap 4 | gap 8 | chance |
+|---|---|---|---:|---:|---:|---:|
+| gate | out | neurons | 0.076 | 0.076 | 0.076 | 0.063 |
+| gate | **in** | **residual stream** | **0.508** | 0.178 | 0.105 | 0.031 |
+| up | out | neurons | 0.062 | 0.062 | 0.063 | 0.063 |
+| up | **in** | **residual stream** | **0.506** | 0.174 | 0.093 | 0.031 |
+| down | **out** | **residual stream** | **0.489** | 0.127 | 0.046 | 0.031 |
+| down | in | neurons | 0.063 | 0.063 | 0.062 | 0.063 |
+
+**The split is 3/3 along the same seam, and the sides swap for `down`.**
+`gate` and `up` read the residual stream on their input mode; `down` writes to it
+on its output mode. The residual stream is one representation space maintained
+across all layers, so dictionaries anchored to it are comparable between layers.
+The intermediate neuron space is private per layer and defined only up to
+permutation — and those dictionaries measure at chance, exactly as that predicts.
+The `up`/`down` runs were predictions registered from the `gate` result, not a
+post-hoc reading.
+
+Design consequences: the depth chart applies to the residual-stream-facing mode
+only, the neuron-facing dictionary stays per-layer, and charts must be
+**piecewise** — affinity halves by gap 2–3 and reaches chance by gap 6–8, so a
+single low-degree polynomial across all layers is not supported. See
+[`docs/FINDINGS.md`](docs/FINDINGS.md) for the full table and consequences,
+including two findings (F3, F4) about estimator design that came out of
+validation.
+
+---
+
+## Install
+
+```bash
+uv venv .venv && VIRTUAL_ENV=.venv uv pip install --python .venv/bin/python -e .
+.venv/bin/python -m pytest tests/ -q
+```
+
+CPU-only by design: every algorithm streams one expert table at a time and the
+whole pipeline runs in well under 28 GB with no GPU. Phases that genuinely need
+a GPU (task benchmarks, latency, HBM) are deliberately not implemented here.
+
+## Use
+
+```bash
+moeopt econ                                     # parameter-economics tables
+moeopt audit-depth MODEL --rank 64              # gate G0: depth smoothness
+moeopt sweep MODEL --ranks 16 32 64 --max-layers 2   # matched-budget Pareto
+```
+
+---
+
+## Layout
+
+```
+src/moe_optimizer/
+  param_economics.py    storage models for every method family; the C1 analysis
+  registry.py           name -> factory, so every method is reachable uniformly
+  types.py              MoEArch / Slot / RoutingStats
+  io/
+    checkpoint.py       shard-aware, memory-mapped, one-table-at-a-time access
+    adapters/           Qwen3-MoE, OLMoE, Mixtral, DeepSeek naming + shapes
+  geometry/
+    spectrum.py         effective / stable rank, energy-at-rank
+    subspace.py         principal angles, Grassmann + chordal distance
+    alignment.py        neuron permutation alignment (exact, via LAP)
+    depth.py            gate G0: does the dictionary rotate smoothly with depth?
+  community/cluster.py  spectral / agglomerative / uniform-null clustering
+  factorize/
+    base.py             Compressor contract + byte-exact SlotCode accounting
+    whiten.py           activation-aware whitening (default path, not optional)
+    chart.py            Legendre + routing-weighted empirical orthogonal bases
+  methods/
+    baselines.py        per-expert SVD, shared base+delta, MoBE-like shared basis
+    local_atlas.py      POEM-Atlas: communities + local dictionaries
+    depth_atlas.py      the depth chart, with Procrustes gauge alignment
+  eval/sweep.py         matched-budget Pareto sweeps
+  cli.py
+```
+
+---
+
+## Design rules
+
+**Bytes, not parameters.** `SlotCode.nbytes` counts serialised bytes including
+every scale, index and shape. Parameter counts hide quantisation; omitting
+metadata hides sparse-residual index overhead. `component_bytes` always splits
+shared / per-expert / residual, so the C1 ratio is visible on every result.
+
+**One table in memory at a time.** A single expert table is 0.5–0.8 GB in float32;
+the checkpoint is 14–60 GB. Every algorithm consumes `ExpertStore.stack(slot)`
+and releases it. `geometry.depth` never even forms the table — it accumulates
+Gram matrices one expert at a time.
+
+**Whitening is the default path.** Plain factorisation minimises `‖W − Ŵ‖_F`;
+deployment cares about `‖(W − Ŵ)x‖` under the real token distribution.
+arXiv:2606.03465 traces the underperformance of tensor decompositions on LLMs to
+exactly this mismatch, so the un-whitened variant is an ablation, not the default.
+
+**Matrix factorisation, not Tucker.** The same paper reports TD-MoE
+substantially underperforming the matrix baseline MoBE on the models we target.
+A Tucker arm is kept for ablation only.
+
+**A null model for every clustering claim.** `CLUSTERERS["uniform"]` groups
+experts into arbitrary contiguous blocks. Any gain attributed to functional
+clustering must be measured against it; if a method does no better, its
+clustering step is decoration.
+
+**Training-free, defined explicitly.**
+
+| tier | permitted | status |
+|---|---|---|
+| T0 | closed form only — SVD, weighted QR, least squares | main result |
+| T1 | T0 + alternating least squares on calibration statistics; no backprop, no labels | main result |
+| T2 | gradient recovery, distillation, LM loss | ablation only |
+
+Everything currently implemented is T0 or T1.
+
+---
+
+## Status
+
+Working and tested: parameter economics, checkpoint I/O and adapters, geometry
+(spectrum / subspace / alignment / depth), clustering, whitening, orthogonal
+charts, four compression methods, byte accounting, Pareto sweeps, CLI.
+
+Not yet built: calibration hooks for routing and activation statistics (the
+`stats` dict every method already accepts), sparse outlier residuals, adaptive
+rank allocation, the serialised artifact format, and the runtime modes. Task
+benchmarks and system measurements need a GPU and are out of scope here.

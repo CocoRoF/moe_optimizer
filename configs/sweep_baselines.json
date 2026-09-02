@@ -1,0 +1,16 @@
+[
+  {"name": "per_expert_svd",    "rank": 32,  "whiten": false},
+  {"name": "per_expert_svd",    "rank": 64,  "whiten": false},
+  {"name": "shared_base_delta", "rank": 32,  "whiten": false},
+  {"name": "shared_base_delta", "rank": 64,  "whiten": false},
+  {"name": "shared_basis",      "rank": 64,  "n_basis": 8, "iters": 4, "whiten": false},
+
+  {"name": "local_atlas", "n_communities": 1,  "rank": 64, "clusterer": "uniform",  "whiten": false},
+  {"name": "local_atlas", "n_communities": 4,  "rank": 64, "clusterer": "uniform",  "whiten": false},
+  {"name": "local_atlas", "n_communities": 4,  "rank": 64, "clusterer": "spectral", "whiten": false},
+  {"name": "local_atlas", "n_communities": 8,  "rank": 64, "clusterer": "uniform",  "whiten": false},
+  {"name": "local_atlas", "n_communities": 8,  "rank": 64, "clusterer": "spectral", "whiten": false},
+
+  {"name": "local_atlas", "n_communities": 8, "rank": 64, "clusterer": "spectral",
+   "whiten": false, "expert_chart": true, "chart_q": 2, "chart_degree": 3}
+]
