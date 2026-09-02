@@ -144,8 +144,8 @@ def test_write_slot_targets_the_right_half_of_fused_gate_up():
             self.down_proj = nn.Parameter(torch.zeros(E, d, d_ff))
 
     f = Fused()
-    g, u, d = (torch.full((3, 4, 5), v) for v in (1.0, 2.0, 0.0)), None, torch.full((3, 5, 4), 3.0)
     g, u = torch.full((3, 4, 5), 1.0), torch.full((3, 4, 5), 2.0)
+    d = torch.full((3, 5, 4), 3.0)
     write_slot(f, "gate", g); write_slot(f, "up", u); write_slot(f, "down", d)
     assert torch.equal(f.gate_up_proj[:, :4], g) and torch.equal(f.gate_up_proj[:, 4:], u)
     assert torch.equal(f.down_proj, d)
