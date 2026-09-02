@@ -518,3 +518,95 @@ What survives is not nothing: whitened per-expert SVD at 75% size gives 15.6%
 output error with zero cross-expert assumptions. Whether that is acceptable in
 perplexity is F12, not yet run. And the question of whether OLMoE is simply
 the wrong testbed is the Qwen3-30B-A3B re-run, in progress.
+
+---
+
+## F11 — Qwen3-30B-A3B, weight space: more depth structure than OLMoE, still no shared directions
+
+```bash
+moeopt audit-depth Qwen/Qwen3-30B-A3B --rank 64 --matrices gate --sides in out
+python3 scripts/neuron_nn.py Qwen/Qwen3-30B-A3B 4
+```
+
+### F6 on Qwen3 (gate, rank 64, 48 layers)
+
+| side | gap 1 | gap 2 | gap 4 | gap 8 | chance | OLMoE gap 1 / gap 8 |
+|---|---:|---:|---:|---:|---:|---:|
+| **in** (residual stream) | **0.584** | 0.468 | 0.315 | **0.277** | 0.031 | 0.508 / 0.105 |
+| out (neurons) | 0.096 | 0.096 | 0.097 | 0.097 | 0.083 | 0.076 / 0.076 |
+
+The residual/neuron split replicates (2/2 on Qwen3 so far; `up`/`down` queued).
+The residual-side signal is stronger and **much longer-range** than OLMoE:
+gap-8 affinity 0.277 vs 0.105.
+
+### Per-depth profile — ConMoE's middle-layer effect, reproduced
+
+Gap-1 affinity along depth, residual side:
+
+| layers | 0–3 | 4–7 | 8–16 | 16–17 | 17–44 | 45–47 |
+|---|---:|---:|---:|---:|---:|---:|
+| gap-1 affinity | 0.08–0.32 | 0.33–0.65 | 0.55–0.75 | **0.77** (max) | 0.43–0.76 | 0.43 → 0.27 |
+
+Mean 0.584. Both ends are near OLMoE-like or worse; the middle ~30 layers sit
+at 0.6–0.77. ConMoE (arXiv:2605.29350) reported "several middle layers exceed
+70%" cross-layer nearest-neighbour rates on this model; this is the same
+pattern from a subspace instrument rather than an expert-matching one.
+
+### Union rank — still no shared directions, but a softer overlap than OLMoE
+
+| pair | affinity | union rank (sv>0.1) | angles < 8° | angles < 26° |
+|---|---:|---:|---:|---:|
+| 4,5 (early) | 0.635 | 128/128 | 0 | 15 |
+| 5,6 (early) | 0.330 | 128/128 | 0 | 1 |
+| 22,23 (middle) | 0.709 | 128/128 | 0 | 30 |
+| 23,24 (middle) | 0.756 | 128/128 | 0 | **35** |
+| 24,25 (middle) | 0.662 | 128/128 | 0 | 25 |
+
+4-layer window, union rank at sv>0.5: OLMoE 159/256; Qwen3 middle **108/256**.
+The middle band has roughly 1.5× the soft overlap of OLMoE — and still not one
+direction shared to 8°. **A shared basis is as unsupported here as on OLMoE.**
+
+What the middle band *might* support is different: an anchor at layer l plus a
+low-rank correction for layer l+1. ### F11a — rank of the depth correction (gate/in, rank-64 dictionaries)
+
+| band | pair | energy outside span(U_l) | correction rank @90% | dictionary saving if anchored |
+|---|---|---:|---:|---:|
+| early | 1→2 | 0.860 | 54/64 | 16% |
+| early | 2→3 | 0.763 | 52/64 | 19% |
+| middle | 16→17 | 0.232 | 43/64 | 33% |
+| middle | 23→24 | 0.244 | 45/64 | 30% |
+| middle | 30→31 | 0.249 | 44/64 | 31% |
+| late | 44→45 | 0.335 | 45/64 | 30% |
+| late | 46→47 | 0.734 | 50/64 | 22% |
+
+Read this against F1: the dictionary is the only term that matters, and this
+is the saving on one side of it, per adjacent pair, before whitening.
+
+### F7 on Qwen3 (raw, 12 of 48 layers, 1.18M gate rows)
+
+| | p10 | p25 | **p50** | p75 | p90 | p99 |
+|---|---:|---:|---:|---:|---:|---:|
+| Qwen3 raw | 0.134 | 0.182 | **0.260** | 0.346 | 0.421 | 0.556 |
+| OLMoE raw | 0.119 | 0.141 | 0.191 | 0.269 | 0.370 | 0.597 |
+
+Chance 0.117. NN > 0.9: **0.0%**. NN > 0.5: 2.6%. Median is above OLMoE's but
+under the pre-registered 0.3 kill line for raw; the neuron-codebook direction
+does not reopen on Qwen3 in weight space.
+
+### Pre-registered prediction for the whitened Qwen3 re-run (F9-Qwen3)
+
+OLMoE's whitening lifted the neuron-NN median 0.19 → 0.38 (2.0×). Applying the
+same factor: **Qwen3 whitened median ≈ 0.45–0.50**, fraction > 0.9 under 1%.
+Adjacent-layer union rank stays 128/128. The branch-1 gate remains median > 0.5;
+if Qwen3 lands at 0.5+ it is a marginal reopening and the correct response is
+the k-means test (F10-Qwen3), not a claim.
+
+### Verdict
+
+**The model matters, in the direction the literature said.** Qwen3 has a
+stronger, longer-range residual-side depth structure concentrated in its middle
+layers. It does not have shared directions, and it does not have duplicate
+neurons. The only mechanism the new evidence points at is a depth anchor with a
+low-rank correction on the residual-facing dictionary, in the middle band, on
+one matrix side — a narrower claim than anything the original design proposed,
+and one that has to survive the whitened re-measurement before it is anything.
