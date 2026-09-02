@@ -22,13 +22,21 @@ def _corpus(tokenizer, n_tokens: int, seq_len: int, name: str = "wikitext"):
 
 def run_calibration(model_id: str, out: str, n_tokens: int = 32768, seq_len: int = 512,
                     batch: int = 4, dtype=torch.bfloat16, cache_dir: str | None = None,
-                    layers: list[int] | None = None, max_batches: int | None = None) -> dict:
+                    layers: list[int] | None = None, max_batches: int | None = None,
+                    cpu_mem: str | None = None, offload_dir: str | None = None) -> dict:
+    """``cpu_mem``/``offload_dir`` enable accelerate disk offload for models that do
+    not fit in RAM (Qwen3-30B-A3B is 60 GB bf16 against 28 GB here).  Layers are
+    paged in from NVMe per forward; the hooks are unaffected because each module
+    still executes on CPU with its weights resident at that moment."""
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     t0 = time.time()
     tok = AutoTokenizer.from_pretrained(model_id, cache_dir=cache_dir)
-    model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=dtype, cache_dir=cache_dir,
-                                                 low_cpu_mem_usage=True)
+    kw = dict(dtype=dtype, cache_dir=cache_dir, low_cpu_mem_usage=True)
+    if cpu_mem:
+        kw |= dict(device_map="auto", max_memory={"cpu": cpu_mem},
+                   offload_folder=offload_dir or "runs/offload", offload_state_dict=True)
+    model = AutoModelForCausalLM.from_pretrained(model_id, **kw)
     model.eval()
     print(f"model loaded in {time.time()-t0:.0f}s", flush=True)
 
