@@ -384,3 +384,72 @@ directions. Prediction: whitened neuron-NN median rises from 0.191 to
 under 1%. Adjacent-layer union rank stays near 128/128. If F9 beats this
 prediction substantially — median above 0.5 — activation space has structure
 weight space hid and branch 1 of REDESIGN §5.2 is live. If it matches, branch 2.
+
+---
+
+## F9 — Activation space: more structure than weight space, not enough to share
+
+```bash
+python3 scripts/whitened_geometry.py runs/calib_olmoe_32k.pt
+```
+
+Whitened cosine of two gate rows equals the correlation of their
+pre-activations on the calibration distribution — the metric every successful
+training-free method optimises.
+
+### F7 re-measured (neuron NN, gate rows, per-layer whitening)
+
+| | p10 | p25 | **p50** | p75 | p90 | p99 |
+|---|---:|---:|---:|---:|---:|---:|
+| raw (F7) | 0.119 | 0.141 | 0.191 | 0.269 | 0.370 | 0.597 |
+| **whitened** | 0.256 | 0.304 | **0.384** | 0.483 | 0.577 | 0.754 |
+| whitened, other layers only | 0.226 | 0.272 | 0.340 | 0.428 | 0.514 | 0.654 |
+
+Fraction with NN > 0.5: raw 2.8% → **whitened 21.5%**. > 0.7: 0.2% → 2.0%.
+> 0.9: 0.0% → **0.1%**.
+
+### F6 re-measured (adjacent-layer residual-side dictionaries)
+
+| pair | affinity raw → whitened | union rank (sv>0.1) | angles < 8° |
+|---|---|---:|---:|
+| 4,5 | 0.51 → 0.595 | 128 / 128 | 0 |
+| 5,6 | 0.51 → 0.679 | 128 / 128 | 0 |
+| 6,7 | 0.51 → 0.683 | 128 / 128 | 0 |
+
+### Against the pre-registered prediction (F8)
+
+Predicted whitened median 0.25–0.35; measured 0.384 — the prediction was
+slightly *pessimistic*, which is the honest direction to be wrong in. The
+opening condition for branch 1 was median > 0.5. Not met.
+
+### Verdict — branch 2
+
+Activation-space re-measurement moved every number in the direction the
+"Rethinking" paper predicts, and by a real margin: the caveat on F1b/F5/F6/F7
+was justified. But the movement is from "no structure" to "weak, diffuse
+structure". A neuron codebook needs most neurons above ~0.9; 0.1% are. A shared
+layer subspace needs near-zero principal angles; there are none.
+
+**On OLMoE-1B-7B, no training-free structural-sharing mechanism has support at
+any granularity — layer subspace, expert, neuron — in either metric.** This is
+now a closed question for this model, with seven pre-registered probes behind it.
+
+What that leaves, in order of how much of the original goal each keeps:
+
+1. **Within-layer local dictionaries (B) as a matched-byte comparison against
+   per-expert SVD and MoBE-like at 40–80%, whitened** — the F5 sweep rerun in
+   the right metric. Running now. Its purpose is no longer to find a win; it is
+   to establish the baseline row honestly.
+2. **Testbed switch.** OLMoE is a small, dropless, fine-grained MoE — plausibly
+   the *least* redundant MoE there is. Every literature redundancy claim used
+   here (ConMoE 50.4% cross-layer NN, LorExperts communities, MoBE 24–30%) was
+   made on Qwen3-30B-A3B or larger. The seven probes are cheap and CPU-only;
+   rerunning them there is the correct next experiment *before* any method
+   work, and it is the one that can reopen branch 1.
+3. **Quantization composition + expert caching** — the systems path MoEXBench
+   says carries the real gains. Training-free, deployable, but not "one block
+   approximates the rest".
+4. **The negative result itself.** F1 (a bound the literature lacks) plus F2
+   (a clean 3/3 mechanistic split) plus F6/F7/F9 (redundancy absent at every
+   granularity in both metrics on a fully open MoE) is a geometry-audit paper
+   on its own.
