@@ -31,6 +31,58 @@ Pinned as `tests/test_compressors.py::test_expert_chart_saving_is_negligible`.
 regulariser and a progressive code. It is not a compressor, and must not be
 claimed as one.
 
+### F1 confirmed on real weights
+
+```bash
+moeopt sweep allenai/OLMoE-1B-7B-0924 --max-layers 1 --matrices gate \
+    --ranks 32 128 --communities 1 8
+```
+
+OLMoE-1B-7B, layer 0, `gate`. The sweep runs `local_atlas` twice at each setting,
+identical except for `expert_chart`:
+
+| # | method | expert_chart | ratio | rel_fro | per-expert share |
+|---|---|---|---:|---:|---:|
+| 4 | local_atlas r=32 k=1 | off | 0.016 | 0.98393 | 0.002 |
+| 5 | local_atlas r=32 k=1 | **on** | 0.016 | 0.98393 | 0.002 |
+| 6 | local_atlas r=32 k=8 | off | 0.131 | 0.92570 | 0.000 |
+| 7 | local_atlas r=32 k=8 | **on** | 0.131 | 0.92570 | 0.000 |
+
+The chart pairs are **identical to five decimals in both size and error**. The
+per-expert share on real weights is 0.2% and 0.0%, against the 0.024% predicted
+by `E/(E+D)` for this model.
+
+For contrast, in the same sweep the MoBE-like `shared_basis` has a per-expert
+share of **0.800** — its `A_e` is per-expert *and* dictionary-sized. That is where
+a compression lever still exists; the coefficient table is not.
+
+### F1b — OLMoE expert weights are close to full rank
+
+An unplanned observation from the same run, and an uncomfortable one:
+
+| method | ratio | rel_fro |
+|---|---:|---:|
+| per_expert_svd r=32 | 0.047 | 0.907 |
+| shared_base_delta r=32 | 0.062 | 0.900 |
+| shared_basis r=32 | 0.020 | 0.961 |
+| local_atlas r=32 k=8 | 0.131 | 0.926 |
+
+At 1.6-13% of dense, *every* method — including the per-expert SVD floor — leaves
+90-98% relative Frobenius error. Rank 32 of a possible 1024 captures almost
+nothing, and the ranking between methods is nearly flat.
+
+This is consistent with arXiv:2606.03465's report that LLM weight spectra are
+close to power-law with no exploitable low-rank structure, and it sets a hard
+expectation for the project: **structural low-rank compression alone will not
+reach useful ratios on this model.** Sparse outlier residuals, quantisation of
+the factors, and much higher ranks are not refinements to add later — they are
+required for any operating point worth evaluating. Sweeps should target the
+20-60% range, not the 2-13% range used to smoke-test the harness here.
+
+Caveat: these are un-whitened, weight-space errors on one layer of one model.
+The activation-weighted error is the one that matters and may rank methods
+differently; that needs the calibration hooks, which are not yet built.
+
 ---
 
 ## F2 — Cross-layer structure lives in the residual-stream-facing mode only
