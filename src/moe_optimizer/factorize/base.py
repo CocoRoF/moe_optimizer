@@ -176,13 +176,17 @@ def reconstruction_report(
         from .whiten import Whitener
 
         L = Whitener.from_covariance(torch.as_tensor(input_cov)).L
-        err_w = torch.einsum("eoi,ij->eoj", err, L)
-        orig_w = torch.einsum("eoi,ij->eoj", orig, L)
-        out["rel_act"] = float(err_w.norm() / orig_w.norm().clamp_min(1e-30))
-        per_e = err_w.pow(2).flatten(1).sum(1) / orig_w.pow(2).flatten(1).sum(1).clamp_min(1e-30)
-        out["rel_act_worst_expert"] = float(per_e.sqrt().max())
+        # One expert at a time: the batched einsum would allocate two full
+        # (E, d_out, d_in) float64 temporaries, which on a 0.5 GB slot beside a
+        # resident 14 GB model is exactly the allocation that fails.
+        err_sq = torch.empty(err.shape[0], dtype=torch.float64)
+        orig_sq_w = torch.empty(err.shape[0], dtype=torch.float64)
+        for e in range(err.shape[0]):
+            err_sq[e] = (err[e] @ L).pow(2).sum()
+            orig_sq_w[e] = (orig[e] @ L).pow(2).sum()
+        out["rel_act"] = float(err_sq.sum().sqrt() / orig_sq_w.sum().sqrt().clamp_min(1e-30))
+        out["rel_act_worst_expert"] = float((err_sq / orig_sq_w.clamp_min(1e-30)).sqrt().max())
         if weights is not None:
             out["rel_act_routing_weighted"] = float(
-                (w * err_w.pow(2).flatten(1).sum(1)).sum().sqrt()
-                / (w * orig_w.pow(2).flatten(1).sum(1)).sum().sqrt())
+                (w * err_sq).sum().sqrt() / (w * orig_sq_w).sum().sqrt().clamp_min(1e-30))
     return out
