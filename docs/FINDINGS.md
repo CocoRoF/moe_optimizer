@@ -683,3 +683,20 @@ The middle ground I skipped — pooled *full* (d_ff × d_ff) covariance — cost
 uses it for `down`. F8 is re-run with it and F12 re-measured as F12b; only then
 does the 75% point mean anything. F12's r=384 point (56%) runs on the old
 statistics first, as the second point on the same footing.
+
+---
+
+## F8-Qwen3 — feasibility pre-registration (written while the smoke test loads)
+
+Qwen3-30B-A3B is 57 GB on disk against 28 GB RAM; calibration runs through
+accelerate disk offload (`moeopt calib --cpu-mem 10GiB`). Written before the
+smoke number: OLMoE ran 26.5 tok/s fully resident with 1.3B active parameters;
+Qwen3 has 3.3B active (÷2.5) and must page ~60 GB from NVMe per batch (~2 GB/s,
+so ~30 s of I/O per 2,048-token batch). Expected: **8–11 tok/s**, i.e. ~1 hour
+for 32K tokens.
+
+Decision rule: ≥ 5 tok/s → run the full 32K-token F8-Qwen3 and then F9-Qwen3.
+2–5 tok/s → run 8K tokens (covariance of a 2048-dim residual stream is still
+well-conditioned at 8K samples; routing co-activation will be noisy and is
+reported as such). < 2 tok/s → F9-Qwen3 is not feasible on this machine and
+the whitened Qwen3 question is left open, stated as such.
