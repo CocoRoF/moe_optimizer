@@ -42,19 +42,26 @@ def resolve_model(model_id_or_path: str, cache_dir: str | None = None,
     if p.is_dir():
         path = p
     else:
-        if not allow_download:
-            raise FileNotFoundError(
-                f"{model_id_or_path} is not a local directory and downloads are disabled"
-            )
+        # A repo id resolves through the HF cache either way; ``allow_download``
+        # only decides whether a cache miss may hit the network.
         from huggingface_hub import snapshot_download
 
-        path = Path(
-            snapshot_download(
-                model_id_or_path,
-                cache_dir=cache_dir,
-                allow_patterns=["*.json", "*.safetensors", "*.txt", "tokenizer*"],
+        try:
+            path = Path(
+                snapshot_download(
+                    model_id_or_path,
+                    cache_dir=cache_dir,
+                    local_files_only=not allow_download,
+                    allow_patterns=["*.json", "*.safetensors", "*.txt", "tokenizer*"],
+                )
             )
-        )
+        except Exception as exc:  # huggingface_hub raises several types on a miss
+            if not allow_download:
+                raise FileNotFoundError(
+                    f"{model_id_or_path} is neither a local directory nor in the "
+                    f"HF cache at {cache_dir or 'default'}, and downloads are disabled"
+                ) from exc
+            raise
 
     config = json.loads((path / "config.json").read_text())
     adapter = get_adapter(config)
