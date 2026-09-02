@@ -76,6 +76,26 @@ single low-degree polynomial across all layers is not supported. See
 including two findings (F3, F4) about estimator design that came out of
 validation.
 
+## Two negative results already on the board
+
+From the first sweep on real weights (`docs/FINDINGS.md`, F5):
+
+- **Weight-cosine clustering does not beat an arbitrary grouping.** Spectral
+  clustering scores 0.89665 relative error; the `uniform` null model — contiguous
+  blocks of expert indices — scores 0.89659 at identical bytes. The null model
+  fired on its first run. Narrow reading: this indicts raw *weight* similarity,
+  the signal permutation symmetry makes least trustworthy; the routing and output
+  signals need calibration traces that are not built yet.
+- **Sharing does not yet beat the per-expert floor.** The Pareto front is
+  dominated by `per_expert_svd` and `shared_base_delta`, the two methods with no
+  cross-expert structure at all.
+
+Both are measured without activation-aware whitening, in weight space, at ratios
+of 2-20% where F1b shows every method is already broken. That is the finding that
+sets the next priority: **calibration statistics and whitening before any further
+method work** — until the metric is activation-weighted, the sweep cannot
+distinguish a bad method from a bad metric.
+
 ---
 
 ## Install

@@ -79,7 +79,7 @@ class LocalAtlas(Compressor):
         self,
         n_communities: int = 8,
         rank: int = 64,
-        coupling: str = "diag",          # "diag" (r per expert) or "full" (r^2)
+        coupling: str = "full",          # "full" (r^2 per expert) or "diag" (r)
         affinity: str = "weight",
         clusterer: str = "spectral",
         anchor: str = "weighted_mean",   # or "dominant" or "none"
@@ -90,6 +90,10 @@ class LocalAtlas(Compressor):
         dtype: str = "float16",
         seed: int = 0,
     ) -> None:
+        # "full" is the default because HOSVD determines each mode's subspace only
+        # up to an unrelated rotation, which the diagonal form cannot absorb --
+        # see finding F3.  "diag" is retained for the ablation, and costs ~1.6
+        # points of relative error at matched bytes on OLMoE layer 0.
         if coupling not in ("diag", "full"):
             raise ValueError(f"coupling must be 'diag' or 'full', got {coupling!r}")
         self.n_communities, self.rank, self.coupling = n_communities, rank, coupling

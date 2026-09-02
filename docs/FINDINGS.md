@@ -184,3 +184,64 @@ produced reconstruction error of 0.79 — a factor of ~50.
 Any method that fits a factorisation and then approximates the factors must
 re-derive the coefficients against the approximated factors. Regression test:
 `tests/test_depth_atlas.py::test_recovers_smooth_drift`.
+
+---
+
+## F5 — Two negative results from the first real sweep
+
+```bash
+moeopt sweep allenai/OLMoE-1B-7B-0924 --max-layers 1 --matrices gate \
+    --points configs/cmp_coupling.json
+```
+
+OLMoE-1B-7B, layer 0, `gate`, unwhitened, weight-space error.
+
+| # | method | ratio | rel_fro |
+|---|---|---:|---:|
+| 1 | local_atlas k=8 r=32 **diag** spectral | 0.131 | 0.9257 |
+| 2 | local_atlas k=8 r=32 **full** spectral | 0.132 | **0.9098** |
+| 3 | local_atlas k=8 r=64 full **spectral** | 0.1406 | 0.89665 |
+| 4 | local_atlas k=8 r=64 full **uniform (null)** | 0.1406 | **0.89659** |
+| 6 | per_expert_svd r=16 | 0.023 | 0.9365 |
+| 7 | per_expert_svd r=32 | 0.047 | 0.9068 |
+
+### F5a — the diagonal coupling costs real accuracy
+
+Rows 1 vs 2, at bytes matched to within 0.1%: full coupling improves relative
+error from 0.926 to 0.910. This is F3's cost measured on real weights rather than
+on synthetic data, and it is why `LocalAtlas` now defaults to `coupling="full"`.
+Any earlier comparison run with `diag` handicapped the atlas methods.
+
+### F5b — weight-cosine clustering does not beat an arbitrary grouping
+
+Rows 3 vs 4 are identical except for how experts are grouped. Spectral clustering
+on weight cosine scores 0.89665; **`uniform` — arbitrary contiguous blocks of
+expert indices — scores 0.89659, marginally better.** The clustering step
+contributes nothing here.
+
+This is precisely what the `uniform` null model was added to detect, and it fired
+on the first real run.
+
+The correct reading is narrow: the affinity signal used was **raw weight cosine**,
+which neuron permutation symmetry makes the least trustworthy of the four signals
+(`community/cluster.py`). This is evidence against clustering *on raw weight
+similarity* — which is also LorExperts' position — not against functional
+clustering. The `coactivation` and `output` signals need calibration traces that
+are not built yet, and the comparison must be repeated with them before the
+clustering step is either kept or dropped.
+
+### F5c — sharing does not yet beat the per-expert floor
+
+Row 3 spends 3x the bytes of row 7 to gain 0.010 of relative error. Across the
+wider sweep the Pareto front is dominated by `per_expert_svd` and
+`shared_base_delta` — the two simplest methods with no cross-expert structure at
+all.
+
+Caveats, all of which bear on whether this survives: no activation-aware
+whitening (no calibration stats yet), weight-space Frobenius rather than
+functional error, one layer of one model, and ratios of 2-20% where F1b shows
+every method is already broken. The regime that matters is 40-80%.
+
+Taken with F1b, the priority is clear: **calibration statistics and whitening
+come before any further method work.** Until the error metric is
+activation-weighted, this sweep cannot distinguish a bad method from a bad metric.

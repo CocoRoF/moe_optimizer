@@ -1,0 +1,9 @@
+[
+ {"name":"local_atlas","n_communities":8,"rank":32,"coupling":"diag","clusterer":"spectral","whiten":false},
+ {"name":"local_atlas","n_communities":8,"rank":32,"coupling":"full","clusterer":"spectral","whiten":false},
+ {"name":"local_atlas","n_communities":8,"rank":64,"coupling":"full","clusterer":"spectral","whiten":false},
+ {"name":"local_atlas","n_communities":8,"rank":64,"coupling":"full","clusterer":"uniform","whiten":false},
+ {"name":"local_atlas","n_communities":1,"rank":64,"coupling":"full","clusterer":"uniform","whiten":false},
+ {"name":"per_expert_svd","rank":16,"whiten":false},
+ {"name":"per_expert_svd","rank":32,"whiten":false}
+]
