@@ -149,3 +149,36 @@ def test_write_slot_targets_the_right_half_of_fused_gate_up():
     write_slot(f, "gate", g); write_slot(f, "up", u); write_slot(f, "down", d)
     assert torch.equal(f.gate_up_proj[:, :4], g) and torch.equal(f.gate_up_proj[:, 4:], u)
     assert torch.equal(f.down_proj, d)
+
+
+def test_compressed_dir_round_trips_into_a_fused_module(tmp_path):
+    """Phase 1 writes what phase 2 reads, and the tensor lands in the right slice."""
+    import json
+    import torch.nn as nn
+    from safetensors.torch import save_file
+    from moe_optimizer.eval.ppl import load_compressed_into
+
+    class Fused(nn.Module):
+        def __init__(self, E=2, d_ff=3, d=4):
+            super().__init__()
+            self.intermediate_dim = d_ff
+            self.gate_up_proj = nn.Parameter(torch.zeros(E, 2 * d_ff, d))
+            self.down_proj = nn.Parameter(torch.zeros(E, d, d_ff))
+
+    class MLP(nn.Module):
+        def __init__(self): super().__init__(); self.experts = Fused()
+    class Layer(nn.Module):
+        def __init__(self): super().__init__(); self.mlp = MLP()
+    class Inner(nn.Module):
+        def __init__(self): super().__init__(); self.layers = nn.ModuleList([Layer()])
+    class Model(nn.Module):
+        def __init__(self): super().__init__(); self.model = Inner()
+
+    up = torch.full((2, 3, 4), 7.0)
+    save_file({"w": up.half()}, str(tmp_path / "L000.up.safetensors"))
+    (tmp_path / "rows.json").write_text(json.dumps(
+        {"spec": {}, "rows": [{"layer": 0, "matrix": "up", "slot": "L000.up"}], "expert_ratio": 0.5}))
+    m = Model()
+    load_compressed_into(m, str(tmp_path), verbose=False)
+    assert torch.equal(m.model.layers[0].mlp.experts.gate_up_proj[:, 3:], up)
+    assert torch.equal(m.model.layers[0].mlp.experts.gate_up_proj[:, :3], torch.zeros(2, 3, 4))
