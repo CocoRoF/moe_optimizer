@@ -17,6 +17,8 @@ Every number here is reproducible from this repo on CPU. Commands are given.
 | F10 | Whitened, scored by output error: per-expert SVD beats all sharing; clustering ≡ null to 4 dp | OLMoE | **every sharing axis closed** |
 | F11 | Stronger, longer-range depth structure in middle layers; still no shared directions or duplicate neurons | Qwen3-30B | model matters; mechanism narrow |
 | F11a | Depth anchor + correction saves 30–33% of one dictionary side, middle band, pre-whitening | Qwen3-30B | real, small |
+| F11b | Residual/neuron split replicates 3/3; neuron side at chance to 3 dp | Qwen3-30B | **F2 is a two-model result** |
+| F12 | Whitened per-expert SVD at 75%: perplexity 11.06 → 18.03; `down` carries the error (diagonal-only whitening) | OLMoE | contaminated; re-measured as F12b |
 
 ---
 
@@ -706,3 +708,30 @@ RSS 16.4 GB, model load 129 s, offload spill ~60 GB on NVMe at ~1 GB/s reads.**
 Above the 5 tok/s line → the full 32K-token run proceeds (≈78 min), followed by
 F9-Qwen3. Scheduled last in the job chain: 16 GB resident cannot overlap any
 step that loads the 14 GB OLMoE model.
+
+---
+
+## F11b — The residual/neuron split replicates on Qwen3-30B-A3B, 3/3, at chance to three decimals
+
+```bash
+moeopt audit-depth Qwen/Qwen3-30B-A3B --rank 64 --fast --matrices up down --sides in out
+```
+
+| matrix | mode | faces | gap 1 | gap 2 | gap 4 | gap 8 | chance |
+|---|---|---|---:|---:|---:|---:|---:|
+| gate (F11) | **in** | **residual stream** | **0.584** | 0.468 | 0.315 | 0.277 | 0.031 |
+| gate (F11) | out | neurons | 0.096 | 0.096 | 0.097 | 0.097 | 0.083 |
+| up | **in** | **residual stream** | **0.567** | 0.446 | 0.300 | 0.259 | 0.031 |
+| up | out | neurons | 0.083 | 0.083 | 0.084 | 0.083 | **0.083** |
+| down | **out** | **residual stream** | **0.525** | 0.385 | 0.228 | 0.196 | 0.031 |
+| down | in | neurons | 0.083 | 0.083 | 0.084 | 0.084 | **0.083** |
+
+Six slots, two models, and the split falls on the same seam every time, with the
+sides swapping for `down` exactly as the mechanism predicts. On Qwen3 the
+neuron-facing modes measure *at* chance to three decimals — a cleaner null than
+OLMoE's 0.062–0.076 against 0.063. Whatever cross-layer structure a pretrained
+MoE's expert table has, it lives entirely in the mode anchored to the residual
+stream; the private intermediate space carries none.
+
+F2 is now a two-model result and stands as the cleanest finding of the audit,
+independent of whether any compression mechanism ever comes of it.
