@@ -8,7 +8,7 @@ import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
 import torch
-from moe_optimizer.methods.depth_atlas import (DepthAtlas, depth_coordinates,
+from moe_optimizer.ablation.depth_atlas import (DepthAtlas, depth_coordinates,
                                                gauge_align, procrustes_rotation)
 
 L, E, D_OUT, D_IN, R = 16, 8, 40, 56, 6

@@ -134,6 +134,9 @@ src/moe_optimizer/
     subspace.py         principal angles, Grassmann + chordal distance
     alignment.py        neuron permutation alignment (exact, via LAP)
     depth.py            gate G0: does the dictionary rotate smoothly with depth?
+  calib/
+    hooks.py            forward-pass statistics: residual cov, routing, co-activation
+    run.py              run a calibration corpus and save per-layer stats
   community/cluster.py  spectral / agglomerative / uniform-null clustering
   factorize/
     base.py             Compressor contract + byte-exact SlotCode accounting
@@ -142,7 +145,8 @@ src/moe_optimizer/
   methods/
     baselines.py        per-expert SVD, shared base+delta, MoBE-like shared basis
     local_atlas.py      POEM-Atlas: communities + local dictionaries
-    depth_atlas.py      the depth chart, with Procrustes gauge alignment
+  ablation/
+    depth_atlas.py      depth chart -- falsified by F6, kept as the record
   eval/sweep.py         matched-budget Pareto sweeps
   cli.py
 ```
@@ -193,9 +197,18 @@ Working and tested: parameter economics, checkpoint I/O and adapters, geometry
 (spectrum / subspace / alignment / depth), clustering, whitening, orthogonal
 charts, four compression methods, byte accounting, Pareto sweeps, CLI.
 
-Not yet built: calibration hooks for routing and activation statistics (the
-`stats` dict every method already accepts), sparse outlier residuals, adaptive
-rank allocation, the serialised artifact format, and the runtime modes. Task
+Also built: `calib/` -- per-layer residual covariance, routing counts,
+co-activation and per-neuron intermediate second moments from a live forward
+pass (26 tok/s on CPU beside the bf16 model).
+
+Not yet built: sparse outlier residuals, adaptive rank allocation, the
+serialised artifact format, and the runtime modes.
+
+Where the research stands: three weight-space probes at three granularities --
+layer subspace (F6), expert rank (F1b), neuron (F7) -- all find no redundancy
+in OLMoE-1B-7B. All three used the metric arXiv:2606.03465 identifies as wrong.
+The activation-space re-measurement (F9) is the open question everything else
+waits on. Task
 benchmarks and system measurements need a GPU and are out of scope here.
 
 ---
