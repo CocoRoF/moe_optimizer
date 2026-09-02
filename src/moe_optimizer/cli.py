@@ -100,8 +100,10 @@ def cmd_sweep(args) -> int:
 
     write_results(all_results, str(out_dir / "sweep.jsonl"))
     print(f"\nPareto front ({len(all_results)} points):")
-    for r in pareto_front(all_results):
-        print(f"  {r.method:<20} ratio={r.ratio:.4f}  rel_fro={r.error['rel_fro']:.5f}  {r.params}")
+    metric = "rel_act" if calib is not None else "rel_fro"
+    print(f"  (ranked by {metric})")
+    for r in pareto_front(all_results, metric):
+        print(f"  {r.method:<20} ratio={r.ratio:.4f}  {metric}={r.error[metric]:.5f}  {r.params}")
     print(f"\nwrote {out_dir}/sweep.jsonl")
     return 0
 

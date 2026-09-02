@@ -134,14 +134,19 @@ class Compressor(ABC):
 
 
 def reconstruction_report(
-    original: torch.Tensor, code: SlotCode, weights: torch.Tensor | None = None
+    original: torch.Tensor, code: SlotCode, weights: torch.Tensor | None = None,
+    input_cov: torch.Tensor | None = None,
 ) -> dict[str, float]:
     """Error metrics for one compressed slot.
 
-    ``weights`` optionally supplies a per-expert importance (routing frequency),
-    which turns the unweighted Frobenius numbers into workload-weighted ones.
-    Reporting both is deliberate: the gap between them is the practical size of
-    the Frobenius/operator mismatch for this slot.
+    ``weights``    per-expert importance (routing frequency) -> workload-weighted
+                   Frobenius, ``rel_fro_routing_weighted``.
+    ``input_cov``  E[x x^T] of the slot's input -> ``rel_act``, the relative
+                   error of the *outputs* on the calibration distribution:
+                   ||(W - W_hat) L||_F / ||W L||_F with C = L L^T.  This is the
+                   quantity a whitened fit minimises and the one deployment
+                   cares about; ``rel_fro`` is reported alongside it so the
+                   size of the Frobenius/operator mismatch is visible per slot.
     """
     approx = code.reconstruct().to(torch.float64)
     orig = original.to(torch.float64)
@@ -167,4 +172,17 @@ def reconstruction_report(
         out["rel_fro_routing_weighted"] = float(
             (w * per_expert_sq).sum().sqrt() / (w * orig_sq).sum().sqrt()
         )
+    if input_cov is not None:
+        from .whiten import Whitener
+
+        L = Whitener.from_covariance(torch.as_tensor(input_cov)).L
+        err_w = torch.einsum("eoi,ij->eoj", err, L)
+        orig_w = torch.einsum("eoi,ij->eoj", orig, L)
+        out["rel_act"] = float(err_w.norm() / orig_w.norm().clamp_min(1e-30))
+        per_e = err_w.pow(2).flatten(1).sum(1) / orig_w.pow(2).flatten(1).sum(1).clamp_min(1e-30)
+        out["rel_act_worst_expert"] = float(per_e.sqrt().max())
+        if weights is not None:
+            out["rel_act_routing_weighted"] = float(
+                (w * err_w.pow(2).flatten(1).sum(1)).sum().sqrt()
+                / (w * orig_w.pow(2).flatten(1).sum(1)).sum().sqrt())
     return out

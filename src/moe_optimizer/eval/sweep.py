@@ -61,7 +61,8 @@ def sweep_slot(
         t0 = time.perf_counter()
         try:
             code = COMPRESSORS.get(name)(**spec).fit(stack, stats)
-            err = reconstruction_report(stack, code, weights=importance)
+            err = reconstruction_report(stack, code, weights=importance,
+                                        input_cov=stats.get("input_cov") if stats else None)
             res = SweepResult(
                 slot=slot_name, method=name, params=spec, bytes=code.nbytes,
                 ratio=code.ratio(), per_expert_share=code.per_expert_share,
@@ -79,9 +80,10 @@ def sweep_slot(
         out.append(res)
         if verbose:
             e = res.error.get("rel_fro", float("nan"))
+            a = res.error.get("rel_act", float("nan"))
             note = res.meta.get("error", "")
             print(f"  [{i + 1:>3}/{len(points)}] {name:<20} "
-                  f"ratio={res.ratio:>6.3f}  rel_fro={e:>8.5f}  "
+                  f"ratio={res.ratio:>6.3f}  rel_fro={e:>8.5f}  rel_act={a:>8.5f}  "
                   f"peshare={res.per_expert_share:>6.3f}  {res.seconds:>5.1f}s {note}",
                   flush=True)
     return out
@@ -93,10 +95,12 @@ def write_results(results: list[SweepResult], path: str) -> None:
             f.write(json.dumps(asdict(r)) + "\n")
 
 
-def pareto_front(results: list[SweepResult], metric: str = "rel_fro") -> list[SweepResult]:
+def pareto_front(results: list[SweepResult], metric: str = "rel_act") -> list[SweepResult]:
     """Points not dominated on (bytes, error) -- both smaller is better."""
     valid = [r for r in results if r.bytes == r.bytes and r.error.get(metric, float("nan"))
              == r.error.get(metric, float("nan"))]
+    if not valid and metric != "rel_fro":          # no calibration -> fall back
+        return pareto_front(results, "rel_fro")
     front: list[SweepResult] = []
     for r in sorted(valid, key=lambda x: x.bytes):
         if not front or r.error[metric] < front[-1].error[metric]:

@@ -110,3 +110,22 @@ def test_byte_accounting_is_consistent():
     assert abs(sum(parts.values()) - code.nbytes) < 1e-6
     assert code.dense_bytes("bfloat16") == E * D_OUT * D_IN * 2
     assert 0 < code.ratio() < 10
+
+
+def test_rel_act_rewards_whitened_fit_on_anisotropic_input():
+    """A whitened fit must win on rel_act and may lose on rel_fro.
+
+    This is the metric mismatch that made the first whitened sweep unreadable:
+    fits optimised for the data-weighted norm were scored in the raw one.
+    """
+    g = torch.Generator().manual_seed(11)
+    stack = torch.randn(E, D_OUT, D_IN, generator=g)
+    x = torch.randn(4000, D_IN, generator=g) @ torch.diag(torch.linspace(4.0, 0.05, D_IN))
+    cov = (x.T @ x / 4000).double()
+    stats = {"input_cov": cov}
+    raw = COMPRESSORS.get("per_expert_svd")(rank=6, whiten=False, dtype="float32").fit(stack)
+    wht = COMPRESSORS.get("per_expert_svd")(rank=6, whiten=True, dtype="float32").fit(stack, stats)
+    r_raw = reconstruction_report(stack, raw, input_cov=cov)
+    r_wht = reconstruction_report(stack, wht, input_cov=cov)
+    assert r_raw["rel_fro"] <= r_wht["rel_fro"] + 1e-9        # raw wins its own metric
+    assert r_wht["rel_act"] < r_raw["rel_act"]                 # whitened wins the real one
