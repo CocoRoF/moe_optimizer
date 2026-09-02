@@ -31,10 +31,9 @@ def _store(args):
 
 
 def cmd_econ(args) -> int:
-    from pathlib import Path as _P
-    sys.argv = [sys.argv[0]]
-    script = _P(__file__).resolve().parents[2] / "scripts" / "param_economics.py"
-    exec(compile(script.read_text(), str(script), "exec"), {"__name__": "__main__"})
+    from .param_economics import report
+
+    report()
     return 0
 
 
