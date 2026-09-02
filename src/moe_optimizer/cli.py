@@ -81,6 +81,10 @@ def cmd_sweep(args) -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    calib = torch.load(args.calib)["layers"] if args.calib else None
+    if calib is not None:
+        print(f"calibration : {args.calib} ({sum(v['n_tokens'] for v in calib.values()) // len(calib):,} tokens/layer)")
+
     all_results = []
     layers = list(store.arch.moe_layers)[: args.max_layers] if args.max_layers else \
         list(store.arch.moe_layers)
@@ -89,7 +93,9 @@ def cmd_sweep(args) -> int:
             slot = Slot(layer, matrix)
             print(f"\n=== {slot} ===")
             stack = store.stack(slot)
-            all_results += sweep_slot(stack, str(slot), points)
+            stats = _slot_stats(calib, layer, matrix) if calib is not None else None
+            imp = stats["importance"] if stats else None
+            all_results += sweep_slot(stack, str(slot), points, stats=stats, importance=imp)
             del stack
 
     write_results(all_results, str(out_dir / "sweep.jsonl"))
@@ -98,6 +104,24 @@ def cmd_sweep(args) -> int:
         print(f"  {r.method:<20} ratio={r.ratio:.4f}  rel_fro={r.error['rel_fro']:.5f}  {r.params}")
     print(f"\nwrote {out_dir}/sweep.jsonl")
     return 0
+
+
+def _slot_stats(calib: dict, layer: int, matrix: str) -> dict:
+    """Per-slot statistics for the compressors.
+
+    gate/up read the residual stream, so their input covariance is the layer's
+    residual second moment.  down reads the intermediate activation, whose full
+    covariance was not collected (see calib/hooks.py); it gets the diagonal,
+    pooled over experts, which whitens scale but not direction.
+    """
+    st = calib[layer]
+    if matrix in ("gate", "up"):
+        cov = st["input_cov"]
+    else:
+        cov = torch.diag(st["inter_sq"].mean(0))
+    return {"input_cov": cov, "importance": st["importance"],
+            "counts": st["counts"], "coactivation": st["coactivation"],
+            "n_tokens": st["n_tokens"]}
 
 
 def _default_points(args) -> list[dict]:
@@ -141,6 +165,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--ranks", type=int, nargs="+", default=[16, 32, 64, 128])
     s.add_argument("--communities", type=int, nargs="+", default=[1, 4, 8])
     s.add_argument("--points", default="", help="JSON file of explicit sweep points")
+    s.add_argument("--calib", default="", help="calibration .pt from `calib/run.py`; enables whitening")
     s.set_defaults(fn=cmd_sweep)
 
     args = p.parse_args(argv)

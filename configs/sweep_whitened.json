@@ -1,0 +1,15 @@
+[
+  {"name": "per_expert_svd",    "rank": 256, "whiten": true},
+  {"name": "per_expert_svd",    "rank": 384, "whiten": true},
+  {"name": "per_expert_svd",    "rank": 512, "whiten": true},
+  {"name": "shared_base_delta", "rank": 256, "whiten": true},
+  {"name": "shared_base_delta", "rank": 384, "whiten": true},
+  {"name": "shared_basis",      "rank": 384, "n_basis": 8,  "iters": 4, "whiten": true},
+  {"name": "shared_basis",      "rank": 512, "n_basis": 8,  "iters": 4, "whiten": true},
+  {"name": "local_atlas", "n_communities": 4, "rank": 256, "coupling": "full", "clusterer": "uniform",  "whiten": true},
+  {"name": "local_atlas", "n_communities": 4, "rank": 256, "coupling": "full", "clusterer": "spectral", "affinity": "coactivation", "whiten": true},
+  {"name": "local_atlas", "n_communities": 8, "rank": 256, "coupling": "full", "clusterer": "uniform",  "whiten": true},
+  {"name": "local_atlas", "n_communities": 8, "rank": 256, "coupling": "full", "clusterer": "spectral", "affinity": "coactivation", "whiten": true},
+  {"name": "local_atlas", "n_communities": 8, "rank": 384, "coupling": "full", "clusterer": "spectral", "affinity": "coactivation", "whiten": true},
+  {"name": "per_expert_svd",    "rank": 384, "whiten": false}
+]
