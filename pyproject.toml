@@ -3,6 +3,7 @@ name = "moe-optimizer"
 version = "0.1.0"
 description = "Training-free structural compression of pretrained Mixture-of-Experts LLMs"
 requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
 dependencies = [
     "torch>=2.4",
     "safetensors>=0.4",

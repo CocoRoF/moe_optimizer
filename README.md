@@ -197,3 +197,9 @@ Not yet built: calibration hooks for routing and activation statistics (the
 `stats` dict every method already accepts), sparse outlier residuals, adaptive
 rank allocation, the serialised artifact format, and the runtime modes. Task
 benchmarks and system measurements need a GPU and are out of scope here.
+
+---
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
