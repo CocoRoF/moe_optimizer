@@ -700,3 +700,9 @@ Decision rule: ≥ 5 tok/s → run the full 32K-token F8-Qwen3 and then F9-Qwen3
 well-conditioned at 8K samples; routing co-activation will be noisy and is
 reported as such). < 2 tok/s → F9-Qwen3 is not feasible on this machine and
 the whitened Qwen3 question is left open, stated as such.
+
+**Smoke result (256 tokens, 2 layers hooked, `--cpu-mem 10GiB`): 7.0 tok/s, peak
+RSS 16.4 GB, model load 129 s, offload spill ~60 GB on NVMe at ~1 GB/s reads.**
+Above the 5 tok/s line → the full 32K-token run proceeds (≈78 min), followed by
+F9-Qwen3. Scheduled last in the job chain: 16 GB resident cannot overlap any
+step that loads the 14 GB OLMoE model.
