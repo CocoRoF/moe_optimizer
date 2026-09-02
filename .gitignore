@@ -3,5 +3,7 @@ __pycache__/
 *.pyc
 artifacts/
 runs/
+# ...but keep the measurement summaries FINDINGS.md cites as evidence.
+!runs/*/depth_summary.json
 .cache/
 *.safetensors
