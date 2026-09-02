@@ -218,8 +218,11 @@ structure (gap-1 affinity 0.55-0.77, reproducing ConMoE's middle-layer effect)
 but still zero shared directions and zero duplicate neurons. A depth anchor
 with low-rank correction would save 30-33% of one side's dictionary in that
 band, before whitening -- real, small, and the only lever with measured
-support. Open: F12 (perplexity of whitened SVD on OLMoE) and the whitened
-Qwen3 re-run, which needs disk-offload calibration. Task
+support. F12: whitened per-expert SVD at 75% size takes OLMoE from 11.06 to 18.03
+perplexity (x1.63) -- not usable -- with `down` carrying the most error
+because its input was whitened by diagonal only; re-measured as F12b with the
+full intermediate covariance. Open: the whitened Qwen3 re-run, which needs
+disk-offload calibration. Task
 benchmarks and system measurements need a GPU and are out of scope here.
 
 ---

@@ -636,3 +636,50 @@ neurons. The only mechanism the new evidence points at is a depth anchor with a
 low-rank correction on the residual-facing dictionary, in the middle band, on
 one matrix side — a narrower claim than anything the original design proposed,
 and one that has to survive the whitened re-measurement before it is anything.
+
+---
+
+## F12 — Perplexity of whitened per-expert SVD at 75% size: ×1.63, and `down` is the reason
+
+```bash
+python3 -c "from moe_optimizer.eval.ppl import run_f12; run_f12('allenai/OLMoE-1B-7B-0924',
+    {'name':'per_expert_svd','rank':512,'whiten':True}, 'runs/calib_olmoe_32k.pt', max_tokens=8192)"
+```
+
+OLMoE-1B-7B, all 48 expert slots compressed (expert-table ratio 0.750),
+WikiText-2 test, 8,192 tokens, seq 512.
+
+| | perplexity |
+|---|---:|
+| baseline | **11.060** |
+| whitened per-expert SVD r=512 (75%) | **18.027** (×1.63) |
+
+Not usable. A 63% perplexity increase for a 25% saving is far outside what the
+literature calls compression (MoBE: 1–2% accuracy drop at 24–30% *total*
+reduction).
+
+### Where the error is
+
+| matrix | mean rel_act over 16 layers |
+|---|---:|
+| gate | 0.219 |
+| up | 0.280 |
+| **down** | **0.392** |
+
+The five worst slots of 48 are all `down` (L000 0.435, L013 0.413, L014 0.409,
+L012 0.407, L003 0.402). Median over all slots 0.280.
+
+That is diagnostic, not just descriptive. `gate`/`up` were whitened with the
+full residual-stream covariance. `down` was "whitened" with only the pooled
+**diagonal** of the intermediate activation's second moment, because F8 did not
+collect its covariance — the diagonal fixes scale, not direction, and the
+intermediate activation (post-SiLU × up) is the most anisotropic input in the
+block. So `down` was effectively unwhitened in the sense that matters, and it is
+the matrix carrying the most error. **F12 as measured is contaminated by that
+shortcut and is not yet a fair verdict on whitened SVD.**
+
+The middle ground I skipped — pooled *full* (d_ff × d_ff) covariance — costs
+8 MB per layer. `calib/hooks.py` now collects it as `inter_cov`; `slot_stats`
+uses it for `down`. F8 is re-run with it and F12 re-measured as F12b; only then
+does the 75% point mean anything. F12's r=384 point (56%) runs on the old
+statistics first, as the second point on the same footing.

@@ -16,9 +16,15 @@ Per MoE layer we accumulate
   ``gate_mass``   summed router weight per expert
   ``coact``       (E, E) joint-selection counts, for NPMI affinity
   ``inter_sq``    per-expert, per-neuron E[h^2] of the intermediate activation
-                  h = act(gate x) * (up x), (E, d_ff).  Diagonal only: the full
-                  per-expert (d_ff, d_ff) matrix is 4 GB across a 16-layer model
-                  and does not fit beside the model in 28 GB.
+                  h = act(gate x) * (up x), (E, d_ff).  The full per-expert
+                  (d_ff, d_ff) matrix is 4 GB across a 16-layer model and does
+                  not fit beside the model in 28 GB.
+  ``inter_cov``   the same second moment *pooled over experts*, (d_ff, d_ff)
+                  float64 -- 8 MB per layer.  This is what whitens ``down``.
+                  F12's first run used only the diagonal and ``down`` carried
+                  the worst error of all three matrices; the diagonal fixes
+                  scale but not direction, and the intermediate activation is
+                  the most anisotropic input in the block.
 
 The experts module is fused (weights are 3-D tensors, one loop over hit
 experts), so intermediate activations are recomputed inside the hook from the
@@ -47,6 +53,8 @@ class SlotStats:
     coact: torch.Tensor = field(default=None)
     inter_sq: torch.Tensor = field(default=None)
     inter_n: torch.Tensor = field(default=None)
+    inter_cov: torch.Tensor = field(default=None)
+    inter_cov_n: int = 0
 
     def __post_init__(self):
         E, d, f = self.n_experts, self.d_model, self.d_ff
@@ -56,6 +64,7 @@ class SlotStats:
         self.coact = torch.zeros(E, E, dtype=torch.int64)
         self.inter_sq = torch.zeros(E, f, dtype=torch.float64)
         self.inter_n = torch.zeros(E, dtype=torch.int64)
+        self.inter_cov = torch.zeros(f, f, dtype=torch.float64)
 
     def finalize(self) -> dict:
         n = max(self.n_tokens, 1)
@@ -66,6 +75,7 @@ class SlotStats:
             "coactivation": self.coact,
             "importance": self.counts.double() / n,
             "inter_sq": self.inter_sq / self.inter_n.clamp_min(1).unsqueeze(1).double(),
+            "inter_cov": self.inter_cov / max(self.inter_cov_n, 1),
         }
 
 
@@ -109,6 +119,8 @@ class CalibrationCollector:
                     h = (module.act_fn(gate) * up).double()
                     st.inter_sq[e] += (h * h).sum(0)
                     st.inter_n[e] += h.shape[0]
+                    st.inter_cov += h.T @ h
+                    st.inter_cov_n += h.shape[0]
         return hook
 
     def stats(self) -> dict[int, dict]:
