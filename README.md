@@ -204,11 +204,14 @@ pass (26 tok/s on CPU beside the bf16 model).
 Not yet built: sparse outlier residuals, adaptive rank allocation, the
 serialised artifact format, and the runtime modes.
 
-Where the research stands: three weight-space probes at three granularities --
-layer subspace (F6), expert rank (F1b), neuron (F7) -- all find no redundancy
-in OLMoE-1B-7B. All three used the metric arXiv:2606.03465 identifies as wrong.
-The activation-space re-measurement (F9) is the open question everything else
-waits on. Task
+Where the research stands (see `docs/FINDINGS.md`): on OLMoE-1B-7B every
+sharing axis is closed, in both metrics. Cross-layer (F6, F9): no shared
+directions. Cross-neuron (F7, F9): whitened NN median 0.38, 0.1% above 0.9.
+Cross-expert (F10, whitened, scored by output error): per-expert SVD beats
+every sharing method, and functional clustering ties an arbitrary grouping to
+four decimals. Whitened per-expert SVD at 75% size gives 15.6% output error
+with no sharing assumptions. Open: whether OLMoE is simply the wrong testbed --
+the Qwen3-30B-A3B re-run of the same probes is in progress. Task
 benchmarks and system measurements need a GPU and are out of scope here.
 
 ---

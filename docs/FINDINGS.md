@@ -453,3 +453,68 @@ What that leaves, in order of how much of the original goal each keeps:
    (a clean 3/3 mechanistic split) plus F6/F7/F9 (redundancy absent at every
    granularity in both metrics on a fully open MoE) is a geometry-audit paper
    on its own.
+
+---
+
+## F10 — The decisive whitened sweep: sharing loses to no-sharing in the correct metric
+
+```bash
+moeopt sweep allenai/OLMoE-1B-7B-0924 --max-layers 1 --matrices gate \
+    --points configs/sweep_whitened.json --calib runs/calib_olmoe_32k.pt
+```
+
+OLMoE-1B-7B, layer 0, `gate`. Every method fitted under the data-weighted norm
+(F8 covariance) and scored by `rel_act` = ‖(W−Ŵ)L‖_F / ‖WL‖_F — the output
+error on the calibration distribution. `rel_fro` shown for the mismatch.
+
+| method | ratio | rel_fro | **rel_act** |
+|---|---:|---:|---:|
+| per_expert_svd r=256 | 0.375 | 0.681 | **0.272** |
+| per_expert_svd r=384 | 0.562 | 0.564 | **0.208** |
+| per_expert_svd r=512 | 0.750 | 0.454 | **0.156** |
+| per_expert_svd r=384, *unwhitened* | 0.562 | 0.516 | 0.277 |
+| shared_base_delta r=256 | 0.391 | 0.678 | 0.271 |
+| shared_base_delta r=384 | 0.578 | 0.561 | 0.207 |
+| shared_basis (MoBE-like) r=384 | 0.234 | 0.914 | 0.403 |
+| shared_basis (MoBE-like) r=512 | 0.313 | 0.899 | 0.381 |
+| local_atlas k=4 r=256, **uniform null** | 0.148 | 0.897 | 0.46977 |
+| local_atlas k=4 r=256, co-activation spectral | 0.148 | 0.895 | 0.46994 |
+| local_atlas k=8 r=256, **uniform null** | 0.234 | 0.852 | 0.42077 |
+| local_atlas k=8 r=256, co-activation spectral | 0.234 | 0.846 | 0.42091 |
+| local_atlas k=8 r=384, co-activation spectral | 0.336 | 0.801 | 0.369 |
+
+### Three things this settles
+
+**The metric was hiding a 2.5× factor.** At 37.5% size, raw Frobenius says 68%
+error; the output error on real tokens is 27%. The residual stream's
+anisotropy (F8) makes most weight-space error irrelevant. Every earlier number
+in this file was misleading in magnitude, exactly as the "Rethinking" paper
+predicts. The unwhitened SVD beats its whitened twin on `rel_fro` (0.516 vs
+0.564) and loses on `rel_act` (0.277 vs 0.208) — the fit/score mismatch that
+made the first run of this sweep unreadable, now pinned by a test.
+
+**Sharing does not beat no-sharing.** Per-expert SVD, which shares nothing
+across experts, dominates the front from 37% up. `local_atlas` — both factors
+shared per community, full coupling, whitened, functionally clustered — reaches
+0.369 at 33.6% where SVD's curve gives ~0.30. The shared base in
+`shared_base_delta` adds nothing (0.271 vs 0.272). MoBE-like at 31% sits at
+0.381, also above SVD's trend.
+
+**Functional clustering ≡ arbitrary grouping, to four decimals.** Co-activation
+spectral vs the `uniform` null: 0.46977 vs 0.46994, 0.42077 vs 0.42091. F5b's
+caveat — "maybe it's the weight-cosine signal" — is resolved. It was not the
+signal. The community structure LorExperts describes is not present in this
+model's expert table, in the correct metric.
+
+### Verdict
+
+This is the experiment ASSESSMENT §6 named as decisive. On OLMoE-1B-7B, in the
+correct metric, at 15–75% size, **no cross-expert sharing mechanism tested
+beats per-expert SVD, and functional clustering contributes nothing.** With
+F6/F7/F9 (no cross-layer or cross-neuron redundancy), every sharing axis is now
+closed on this model.
+
+What survives is not nothing: whitened per-expert SVD at 75% size gives 15.6%
+output error with zero cross-expert assumptions. Whether that is acceptable in
+perplexity is F12, not yet run. And the question of whether OLMoE is simply
+the wrong testbed is the Qwen3-30B-A3B re-run, in progress.
