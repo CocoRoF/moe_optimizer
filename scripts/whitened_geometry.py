@@ -44,11 +44,17 @@ def chol(l):
 Ls = {l: chol(l) for l in A.moe_layers}
 
 # --- 1. F7 in whitened space: NN cosine of gate rows, g -> L^T g
-print("\n=== F7 whitened: neuron NN cosine (gate rows), per-layer whitening ===", flush=True)
-N = L * E * D
+# Auto-stride the layer set to a ~1.3M-row budget: Qwen3-30B has 4.7M gate rows
+# (19 GB in fp16), which is the allocation that OOM-killed an earlier probe.
+ROW_BUDGET = 1_300_000
+STRIDE = int(sys.argv[3]) if len(sys.argv) > 3 else max(1, -(-L * E * D // ROW_BUDGET))
+LAYERS = list(A.moe_layers)[::STRIDE]
+print(f"\n=== F7 whitened: neuron NN cosine (gate rows), per-layer whitening; "
+      f"{len(LAYERS)} of {L} layers (stride {STRIDE}) ===", flush=True)
+N = len(LAYERS) * E * D
 rows = torch.empty((N, d), dtype=torch.float16); layer_of = torch.empty(N, dtype=torch.int16)
 t0 = time.time()
-for li, l in enumerate(A.moe_layers):
+for li, l in enumerate(LAYERS):
     Lt = Ls[l].T
     for e in range(E):
         w = st.expert(Slot(l, "gate"), e) @ Lt                     # rows now in whitened coords
@@ -56,13 +62,15 @@ for li, l in enumerate(A.moe_layers):
         i0 = (li * E + e) * D; rows[i0:i0+D] = w.half(); layer_of[i0:i0+D] = li
 print(f"  whitened rows built in {time.time()-t0:.0f}s", flush=True)
 Q = 8000; qidx = torch.randperm(N)[:Q]; q = rows[qidx].float()
-best = torch.full((Q,), -2.0); best_x = torch.full((Q,), -2.0); CH = 65536
-for s in range(0, N, CH):
-    c = rows[s:s+CH].float(); sim = q @ c.T
-    sim[qidx.unsqueeze(1) == torch.arange(s, s+c.shape[0]).unsqueeze(0)] = -2.0
-    m = sim.max(1).values; best = torch.maximum(best, m)
-    other = layer_of[s:s+c.shape[0]].unsqueeze(0) != layer_of[qidx].unsqueeze(1)
-    best_x = torch.maximum(best_x, torch.where(other, sim, torch.tensor(-2.0)).max(1).values)
+best = torch.full((Q,), -2.0); best_x = torch.full((Q,), -2.0); CH = 16384
+qlayer = layer_of[qidx].unsqueeze(1)
+for s0 in range(0, N, CH):
+    c = rows[s0:s0+CH].float(); sim = q @ c.T
+    sim[qidx.unsqueeze(1) == torch.arange(s0, s0+c.shape[0]).unsqueeze(0)] = -2.0
+    best = torch.maximum(best, sim.max(1).values)
+    sim.masked_fill_(layer_of[s0:s0+c.shape[0]].unsqueeze(0) == qlayer, -2.0)
+    best_x = torch.maximum(best_x, sim.max(1).values)
+    del sim, c
 def qs(x): return " ".join(f"p{p}={x.quantile(p/100):.3f}" for p in (10,25,50,75,90,99))
 print(f"  random baseline ~{math.sqrt(2*math.log(N)/d):.3f}   (raw-space F7 median was 0.191)")
 print(f"  overall          : {qs(best)}")
