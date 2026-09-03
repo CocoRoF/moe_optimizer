@@ -347,11 +347,13 @@ class StreamingQwen3MoE(StreamingOLMoE):
     """
 
     def __init__(self, store, config, policy=None, dtype=torch.float32, threads: int = 11,
-                 renorm: bool | None = None):
+                 renorm: bool | str | None = None):
         super().__init__(store, config, policy, dtype, threads)
-        # F25 counterfactual: renorm=False runs Qwen3 *without* top-k renormalisation.
-        # This is a different model (its top-8 perplexity shifts); compare policies
-        # by degradation relative to its own top-8.
+        # renorm=True  : reference behaviour, kept weights / sum of *kept* weights (W_P)
+        # renorm=False : F25 counterfactual, raw probs (model leaves its operating point)
+        # renorm="full": F25b clean counterfactual, kept weights / sum of the *original*
+        #                top-k weights (W_all).  With nothing dropped this is bit-identical
+        #                to the reference; dropping an expert is then pure subtraction.
         self.renorm = bool(config.get("norm_topk_prob", True)) if renorm is None else renorm
         self.hd = config.get("head_dim") or self.d // self.H
         self.KV = config["num_key_value_heads"]; self.groups = self.H // self.KV
@@ -386,7 +388,10 @@ class StreamingQwen3MoE(StreamingOLMoE):
         probs = F.softmax((x @ self._g(p + "mlp.gate.weight").T).float(), -1)
         idx, w = self.policy.select(probs, l)
         # norm_topk_prob=True: renormalise over the experts actually kept
-        if self.renorm:
+        if self.renorm == "full":
+            w_all = probs.topk(self.k, dim=-1).values.sum(-1, keepdim=True).clamp_min(1e-12)
+            w = w / w_all
+        elif self.renorm:
             w = w / w.sum(-1, keepdim=True).clamp_min(1e-12)
         w = w.to(self.dtype)
         out = torch.zeros_like(x)
@@ -394,7 +399,7 @@ class StreamingQwen3MoE(StreamingOLMoE):
         stats.expert_loads += used.numel(); stats.bytes_read += used.numel() * self.expert_bytes
         stats.per_layer_k.append(float((w > 0).sum(1).float().mean()))
         if self.oracle_tau is not None:
-            return h + self._oracle_moe(l, x, idx, w, renorm=self.renorm)
+            return h + self._oracle_moe(l, x, idx, w, renorm=(self.renorm is True))
         for e in used.tolist():
             slot_tok, slot_pos = torch.where(idx == e)
             we = w[slot_tok, slot_pos]; m = we > 0; slot_tok, we = slot_tok[m], we[m]

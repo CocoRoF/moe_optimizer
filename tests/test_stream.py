@@ -118,3 +118,16 @@ def test_qwen3_engine_renorm_flag_defaults_from_config():
            "moe_intermediate_size": 8, "norm_topk_prob": True}
     assert StreamingQwen3MoE(S(), cfg, threads=1).renorm is True
     assert StreamingQwen3MoE(S(), cfg, threads=1, renorm=False).renorm is False
+
+
+def test_full_renorm_is_identity_when_nothing_is_dropped_and_subtraction_when_dropped():
+    """renorm='full' divides by the original top-k mass: with all k kept it equals the
+    reference renormalisation; with one dropped, the survivors' weights are unchanged."""
+    w = torch.tensor([[0.10, 0.08, 0.06, 0.04]]); W_all = w.sum()
+    ref = w / w.sum(-1, keepdim=True)                       # renorm=True, nothing dropped
+    full = w / W_all
+    assert torch.allclose(ref, full)
+    keep = torch.tensor([[1., 1., 1., 0.]])
+    full_dropped = (w * keep) / W_all; ref_dropped = (w * keep) / (w * keep).sum(-1, keepdim=True)
+    assert torch.allclose(full_dropped[0, :3], full[0, :3])            # survivors untouched
+    assert (ref_dropped[0, :3] > full_dropped[0, :3]).all()            # reference rescales them up
