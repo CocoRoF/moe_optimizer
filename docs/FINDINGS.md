@@ -818,3 +818,27 @@ non-sharing low-rank is destructive (F12). The residual/neuron split (F2) is a
 clean two-model mechanistic result. The only lever with measured support is the
 depth anchor + low-rank correction on the residual-facing dictionary in Qwen3's
 middle band, whose whitened saving is the table above.
+
+---
+
+## F13 — The streaming engine reproduces the reference model (E0)
+
+```bash
+python3 scripts/validate_stream.py
+```
+
+`runtime/stream.py` reads one layer's weights at a time from the safetensors
+mmap. Against `OlmoeForCausalLM` (bf16, loaded through disk offload to stay
+under the 30%-free rule), on 34 tokens:
+
+| | value |
+|---|---:|
+| top-1 token agreement | **100%** |
+| NLL stream (fp32) / reference (bf16) | 3.2074 / 3.2123 |
+| max \|Δlogit\| / logit scale | 0.91 / 23.2 |
+| engine bytes per token at top-8 | 326 MB |
+| engine peak RSS | ~3 GB (reference load: 10.4 GB) |
+
+The residual gap is the reference's own bf16 arithmetic through 16 layers.
+From here, every policy is scored on this engine by (perplexity, mean k′,
+bytes/token, tok/s) — the bandwidth-bound decode regime the mechanism targets.
