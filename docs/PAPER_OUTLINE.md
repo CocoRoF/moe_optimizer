@@ -32,7 +32,7 @@
 | 5.2 Quality | ppl vs k′ 표 + **paired bootstrap CI** | F15, **F20(대기)** |
 | 5.3 Bandwidth | bytes/token 선형성, tok/s, 캐시 정확성 | F16 |
 | 5.4 Tail | wikitext/gsm8k/code, tail/mean | F19 |
-| 5.5 Generality | Qwen3 — **동률(null)**, oracle도 실패 → 신호 자체의 문제. renorm이 분리 변수(F25 반사실로 측정) | F21, F22, F24, **F25(대기)** |
+| 5.5 Generality | Qwen3 — **동률(null)**, oracle도 실패 → 신호 자체의 문제. renorm이 분리 변수. F25(renorm off): contribution −40 % — 방향 일치, 단 모델이 4× 손상되어 지지 증거에 그침. **F25b(full-mass renorm, top-8 동일): 깨끗한 측정, 실행 중** | F21, F22, F24, F25, **F25b(대기)** |
 | 5.6 Ablation | contribution vs score-only vs static; linear vs squared share (F23); renorm 오차모델 (F22); **proxy vs oracle (F24: OLMoE 동률 — proxy 충분)** | F15, F22, F23, F24 |
 | 6 Limitations | 절대 비용(+9.8% @ 37.5% 절감), ZEDA 대비, 모델 2개, CPU fp32 무대 | 아래 |
 | 7 Conclusion | | |
@@ -62,6 +62,7 @@
 
 1. **절대 비용.** 최선의 training-free 규칙도 37.5% 로드 절감에 ppl +9.8%. ZEDA(학습)는 50%를 거의 무손실로. 본 논문은 training-free 규칙의 quality-per-skip을 ~3배 올린 것이지 학습과의 격차를 닫은 게 아니다.
 2. **평가 규모.** 2K/8K token, seed 1, 모델 2개. 다운스트림 정확도(MMLU 등)는 GPU 없이 못 잰다 — perplexity만.
+2b. **반사실의 해석.** F25는 renorm을 끄면서 모델을 운영점 밖으로 밀었다(ppl 11.9→42.9). F25b가 top-8을 그대로 두고 제거만 뺄셈으로 만드는 올바른 대조군이며, 논문의 §5.5 결론은 F25b에 걸려 있다.
 3. **무대.** CPU fp32 스트리밍 디코더. GPU 배치 서빙에서 bytes→latency 전환은 다르다(sublinear). 주장은 "대역폭 제한 batch-1"로 한정.
 4. **라우팅 프로파일.** 두 base 모델 모두 top-8 내에서 평탄. "certain head" 모델(Instruct, 추론)에서는 score-only의 손실이 작을 수 있다 — 미측정.
 5. **s_e 안정성.** WikiText로 캘리브레이션해 gsm8k/code에 전이됨(F19)은 확인; 언어·도메인 대이동은 미측정.
