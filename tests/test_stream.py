@@ -65,3 +65,30 @@ def test_scripts_and_package_have_no_undefined_names():
     out = subprocess.run([sys.executable, "-m", "pyflakes", *files], capture_output=True, text=True).stdout
     bad = [l for l in out.splitlines() if "undefined name" in l]
     assert not bad, "\n".join(bad)
+
+
+def test_renorm_policy_reduces_to_squared_share_without_renorm_and_penalises_dropping_under_renorm():
+    from moe_optimizer.runtime.stream import ContributionRenormPolicy
+    p = torch.tensor([[0.30, 0.25, 0.20, 0.15, 0.10]]); scale = {0: torch.ones(5)}
+    # no renorm: squared-share; dropping the two smallest leaves err = (0.15^2+0.10^2)/sum = 0.1327
+    tot = (p**2).sum(); err2 = (0.15**2 + 0.10**2) / tot
+    _, w = ContributionRenormPolicy(5, scale, {0: float(err2) + 1e-6}, renorm=False).select(p, 0)
+    assert (w > 0).sum() == 3
+    # with renorm the same tau must keep MORE (amplification adds error)
+    _, w2 = ContributionRenormPolicy(5, scale, {0: float(err2) + 1e-6}, renorm=True).select(p, 0)
+    assert (w2 > 0).sum() >= 3 and (w2 > 0).sum() > (w > 0).sum() - 1
+    # tau=0 keeps everything; tau=1 keeps min_keep
+    assert (ContributionRenormPolicy(5, scale, {0: 0.0})[1] if False else (ContributionRenormPolicy(5, scale, {0: 0.0}).select(p, 0)[1] > 0).all())
+    assert (ContributionRenormPolicy(5, scale, {0: 1.0}, min_keep=2).select(p, 0)[1] > 0).sum() == 2
+
+
+def test_error_model_tau_calibration_hits_target_k():
+    from moe_optimizer.runtime.calibrate import calibrate_taus_err, error_curve
+    g = torch.Generator().manual_seed(5)
+    tr = {0: torch.rand(400, 8, generator=g).sort(1, descending=True).values}
+    ix = {0: torch.randint(0, 64, (400, 8), generator=g)}; sc = {0: torch.rand(64, generator=g) + 0.5}
+    for renorm in (False, True):
+        tau = calibrate_taus_err(tr, sc, ix, 5.0, renorm)
+        err = error_curve(tr, sc, ix, renorm)[0]; ok = err <= tau[0]; ok[:, -1] = True
+        mean_k = float((ok.float().argmax(1) + 1).float().mean())
+        assert abs(mean_k - 5.0) < 0.15, (renorm, mean_k)

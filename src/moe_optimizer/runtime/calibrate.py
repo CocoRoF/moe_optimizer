@@ -66,3 +66,34 @@ def calibrate_taus(traces, scale, indices, target_k: float, min_keep: int = 1) -
 def scale_dispersion(scale: dict[int, torch.Tensor]) -> dict[int, float]:
     """Coefficient of variation of the calibrated output scale within each layer -- gate G1."""
     return {l: float(s.std() / s.mean().clamp_min(1e-12)) for l, s in scale.items()}
+
+
+def error_curve(traces, scale, indices, renorm: bool) -> dict[int, torch.Tensor]:
+    """Per layer, (T, k) normalised err(P_j) for prefixes j=1..k in w*s order --
+    the quantity ContributionRenormPolicy thresholds.  Mirrors its select()."""
+    out = {}
+    for l, w in traces.items():
+        s = scale[l][indices[l]]; c2 = (w * s).pow(2)
+        order = c2.argsort(1, descending=True); w_s, c2_s = w.gather(1, order), c2.gather(1, order)
+        total = c2_s.sum(1, keepdim=True).clamp_min(1e-30); kept = c2_s.cumsum(1); dropped = total - kept
+        amp = kept * (w_s.sum(1, keepdim=True).clamp_min(1e-12) / w_s.cumsum(1).clamp_min(1e-12) - 1).pow(2) if renorm else torch.zeros_like(kept)
+        out[l] = (dropped + amp) / total
+    return out
+
+
+def calibrate_taus_err(traces, scale, indices, target_k: float, renorm: bool, min_keep: int = 1) -> dict[int, float]:
+    """Per-layer tau for the error-model policies hitting target_k (bisection; mean k is monotone in tau)."""
+    curves = error_curve(traces, scale, indices, renorm); out = {}
+    for l, err in curves.items():
+        k = err.shape[1]
+        def mean_k(tau):
+            ok = err <= tau; ok[:, k - 1] = True
+            j = torch.clamp(ok.float().argmax(1), min=min_keep - 1)
+            return float((j + 1).float().mean())
+        lo, hi = 0.0, 1.0
+        for _ in range(40):
+            mid = 0.5 * (lo + hi)
+            if mean_k(mid) > target_k: lo = mid
+            else: hi = mid
+        out[l] = 0.5 * (lo + hi)
+    return out

@@ -125,6 +125,52 @@ class ContributionPolicy(ExpertPolicy):
         return i, w * keep
 
 
+class ContributionRenormPolicy(ContributionPolicy):
+    """Contribution skipping with an error model instead of a share heuristic.
+
+    Expert outputs are near-orthogonal in this model class (F7/F9), so for a
+    kept set P the squared output error, with s_e as the proxy for ||E_e(x)||,
+    decomposes as
+
+        err(P) ~= sum_{e not in P} (w_e s_e)^2                      (dropped)
+                + sum_{e in P}     (w_e s_e)^2 (W_all / W_P - 1)^2   (amplification)
+
+    where the second term exists only when the router renormalises the kept
+    weights (``norm_topk_prob=True``, Qwen3): dropping an expert hands its weight
+    mass to the survivors.  With ``renorm=False`` it vanishes and the rule is a
+    *squared*-share criterion.  Prefixes are taken in w*s order; the smallest
+    prefix with err(P) / sum_all (w_e s_e)^2 <= tau is kept.
+    """
+
+    def __init__(self, k, scale, tau, min_keep: int = 1, renorm: bool = True) -> None:
+        super().__init__(k, scale, tau, min_keep)
+        self.renorm = renorm; self.name = "contribution_renorm" if renorm else "contribution_sq"
+
+    def select(self, probs, layer):
+        w, i = probs.topk(self.k, dim=-1)
+        s = self.scale[layer][i]
+        c2 = (w * s).pow(2)
+        order = c2.argsort(-1, descending=True)
+        w_s, c2_s = w.gather(1, order), c2.gather(1, order)
+        total = c2_s.sum(-1, keepdim=True).clamp_min(1e-30)
+        kept_c2 = c2_s.cumsum(-1)                                  # prefix sums, size j = 1..k
+        dropped = total - kept_c2
+        if self.renorm:
+            W_all = w_s.sum(-1, keepdim=True).clamp_min(1e-12)
+            W_P = w_s.cumsum(-1).clamp_min(1e-12)
+            amp = kept_c2 * (W_all / W_P - 1.0).pow(2)
+        else:
+            amp = torch.zeros_like(kept_c2)
+        err = (dropped + amp) / total                               # (T, k), prefix j at index j-1
+        ok = err <= self.tau.get(layer, 0.0)
+        ok[:, self.k - 1] = True                                    # keeping everything is always allowed
+        j = ok.float().argmax(-1)                                   # first prefix that satisfies the budget
+        j = torch.clamp(j, min=self.min_keep - 1)
+        keep_sorted = torch.arange(self.k).unsqueeze(0) <= j.unsqueeze(1)
+        keep = torch.zeros_like(keep_sorted).scatter(1, order, keep_sorted)
+        return i, w * keep
+
+
 # --------------------------------------------------------------------------- #
 #  the engine
 # --------------------------------------------------------------------------- #
