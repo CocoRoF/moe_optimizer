@@ -91,7 +91,14 @@ by perplexity at matched mean experts-per-token k′. On OLMoE-1B-7B:
 | score-only dynamic (Lu et al. 2024 / arXiv:2512.21911 family, fair k′) | +4.8% | +13.2% | +34.8% |
 | **contribution-calibrated dynamic (ours)** | **+3.8%** | **+9.8%** | **+23.4%** |
 
-(perplexity vs top-8). The published median-threshold rule gives +328%.
+(perplexity vs top-8; 8,192-token paired bootstrap: contribution vs score-only
+−3.0% [−4.0, −2.0] at k′≈5, −7.0% [−8.8, −5.3] at k′≈4). The published
+median-threshold rule gives +309%. **On Qwen3-30B-A3B the same mechanism
+is a statistical tie with score-only** (F22: +0.4% [−1.7, +2.3] at k′=5, after
+fixing a calibration-starvation artefact that had made it a loss in F21), and
+both trail static top-k there. The result is a one-model positive; an oracle
+test (F24) is checking whether the per-token contribution signal helps on Qwen3
+at all or only the mean-scale proxy fails.
 The router score is near-orthogonal to expert output magnitude on this model
 (r = +0.17), so ranking by score is ranking by noise; a calibrated per-expert
 output scale — 64 floats per layer, no training — recovers it.

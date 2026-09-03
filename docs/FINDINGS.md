@@ -27,6 +27,10 @@ Every number here is reproducible from this repo on CPU. Commands are given.
 | F17 | Qwen3-30B-A3B streaming engine validates (100% top-1, NLL 3.508 vs 3.503) | Qwen3-30B | tool |
 | F18 | G1 on Qwen3: CV 0.335; r(scale, gate) = **−0.06**, negative in 15/48 layers | Qwen3-30B | W1 stronger on Qwen3 |
 | F19 | E4: no domain collapse (tail/mean ≤ 1.10); contribution wins every cell; fresh-slice replication −2.8% / −7.1% | OLMoE | G4 passes |
+| F20 | 8K + paired bootstrap: vs score-only **−3.0% [−4.0,−2.0]**, **−7.0% [−8.8,−5.3]**; vs static −2.9% [−4.9,−1.1] at k′≈4 | OLMoE | **headline confirmed** |
+| F21 | Qwen3, 1K calibration: contribution **loses** to score-only (+5.3%/+6.7%) | Qwen3-30B | superseded by F22 |
+| F22 | Qwen3, 4K calibration: contribution vs score-only **+0.4% [−1.7, +2.3]** — a tie; renorm error model worse | Qwen3-30B | **null; one-model result** |
+| F23 | Squared-share variant worse than linear on OLMoE (+1.2%, +2.3%, significant) | OLMoE | heuristic stays |
 
 ---
 
@@ -1058,3 +1062,139 @@ k′≈5 (F15: −3.0%) and **−7.1%** at k′≈4 (F15: −8.5%).
 The 8,192-token confirmation with the paired bootstrap crashed before writing
 (diagnosed and relaunched separately); until it lands, the F15/F19 margins have
 two independent slices behind them and no confidence interval.
+
+---
+
+## F20 — 8,192-token confirmation with paired bootstrap: the OLMoE result holds
+
+```bash
+python3 scripts/policy_sweep.py allenai/OLMoE-1B-7B-0924 8192 5,4
+python3 scripts/paired_bootstrap.py runs/policy_sweep_olmoe.json
+```
+
+16 sequences × 512 tokens, WikiText-2 test. Engine top-8 perplexity 11.051 —
+the HF reference on the same text gave 11.060 (F12), so fidelity holds at 8K.
+
+| policy | k′ | ppl | vs top-8 |
+|---|---:|---:|---:|
+| top-8 | 8.00 | 11.051 | — |
+| mass-ratio (median) | 3.20 | 45.213 | +309% |
+| static top-5 | 5.00 | 12.299 | +11.3% |
+| score-only @5 | 4.94 | 12.579 | +13.8% |
+| **contribution @5** | 4.96 | **12.202** | **+10.4%** |
+| static top-4 | 4.00 | 14.117 | +27.7% |
+| score-only @4 | 3.94 | 14.737 | +33.4% |
+| **contribution @4** | 3.96 | **13.701** | **+24.0%** |
+
+Paired bootstrap over the 16 sequences (B = 5000), perplexity ratio:
+
+| comparison | k′≈5 | k′≈4 |
+|---|---|---|
+| contribution vs score-only | **−3.0% [−4.0, −2.0]** | **−7.0% [−8.8, −5.3]** |
+| contribution vs static top-k | −0.8% [−1.9, +0.3] n.s. | **−2.9% [−4.9, −1.1]** |
+
+F15's 2K margins (−3.0%, −8.5%) reproduce at 8K with intervals that exclude
+zero. Against static top-k the k′≈5 advantage is not resolved; the k′≈4
+advantage is.
+
+---
+
+## F21 — Qwen3-30B-A3B: contribution skipping *loses* — the mechanism is not general as-is
+
+```bash
+python3 scripts/policy_sweep.py Qwen/Qwen3-30B-A3B 1024 5,4
+```
+
+1,024 tokens (2 sequences), calibration from 1,024 tokens (F18).
+
+| policy | k′ | ppl | vs top-8 |
+|---|---:|---:|---:|
+| top-8 | 8.00 | 10.806 | — |
+| mass-ratio (median) | 4.05 | 260.0 | ×24 |
+| static top-5 | 5.00 | **11.493** | +6.4% |
+| score-only @5 | 4.91 | 12.021 | +11.2% |
+| contribution @5 | 4.94 | 12.660 | +17.2% |
+| static top-4 | 4.00 | **12.684** | +17.4% |
+| score-only @4 | 3.94 | 14.053 | +30.0% |
+| contribution @4 | 3.98 | 14.999 | +38.8% |
+
+Contribution is **worse than score-only by +5.3% / +6.7%** and worse than static
+top-k by +10% / +18%. The bootstrap prints "n.s." because it has two sequences;
+the point estimates are large and consistent across both budgets, and this is
+recorded as a negative result, not as noise.
+
+This contradicts the expectation set by F18 (a *stronger* score/contribution
+mismatch on Qwen3 should have helped more). Three testable explanations,
+each of which changes what the paper can claim:
+
+1. **Calibration starvation.** 1,024 tokens × top-8 over 128 experts is ~64
+   tokens per expert per layer, 4× fewer than OLMoE's E1; experts never routed
+   were filled with the layer mean. A noisy `s` ranks by noise. Test:
+   recalibrate on 4,096 tokens, rerun k′≈5.
+2. **Renormalised routing.** Qwen3 has `norm_topk_prob=True`: the kept experts'
+   weights are rescaled to sum to one *after* skipping, so dropping a
+   large-output expert raises every other kept expert's weight. The proxy
+   w_e·s_e ignores this; on OLMoE (no renormalisation) it is exact. Test: a
+   renorm-aware variant that evaluates the kept-set criterion on renormalised
+   weights.
+3. **Outlier experts.** Layer 2's CV of 2.66 means a few experts with outputs an
+   order of magnitude above the rest; contribution ranking keeps them
+   unconditionally and may starve the rest of that layer's budget. Test:
+   per-layer k′ under each policy.
+
+Until one of these resolves it, the claim is narrowed to the regime measured:
+**an unnormalised, flat-scored router (OLMoE-class)**, not fine-grained MoE in
+general.
+
+---
+
+## F22 — Qwen3 with 4× calibration data: the loss becomes a tie; the signal buys nothing
+
+```bash
+python3 scripts/policy_calib.py Qwen/Qwen3-30B-A3B 4096
+python3 scripts/policy_sweep.py Qwen/Qwen3-30B-A3B 4096 5
+```
+
+Calibration 4,096 tokens (~256 tokens per expert per layer, matching OLMoE's
+E1 density); test 4,096 tokens = 8 sequences, k′=5. CV of s: 0.341;
+r(s, gate weight) = −0.053 — F18 reproduces.
+
+| policy | k′ | ppl | vs top-8 (11.879) |
+|---|---:|---:|---:|
+| static top-5 | 5.00 | **12.642** | +6.4% |
+| score-only @5 | 5.00 | 12.945 | +9.0% |
+| contribution @5 | 5.03 | 12.987 | +9.3% |
+| contribution_renorm @5 (error model) | 5.02 | 13.123 | +10.5% |
+
+Paired bootstrap, 8 sequences: contribution vs score-only **+0.4% [−1.7, +2.3]**
+n.s.; contribution vs static +2.7% [−0.3, +6.1] n.s. Per-layer k′ is 4.9–5.2
+for all three rules (the per-layer τ calibration equalises budgets by
+construction).
+
+Against F21's three hypotheses:
+
+1. **Calibration starvation — largely confirmed.** F21's +5.3% loss vs
+   score-only becomes +0.4% with 4× the tokens. The mean scale from 64 tokens
+   per expert was noise.
+2. **Budget hogging by outlier experts — rejected.** Per-layer k′ is flat.
+3. **Renormalisation — rejected as formulated.** The error-model variant that
+   accounts for weight mass handed to survivors is *worse* than the heuristic
+   by 1.1%.
+
+What remains is a null: on Qwen3-30B-A3B the contribution signal, despite a
+larger score/magnitude mismatch than OLMoE's (F18), adds nothing at k′=5.
+Static top-k is also a much stronger baseline here (+6.4% vs OLMoE's +11.3%
+at the same budget) — Qwen3's score already orders its experts usefully, so
+the eighth expert matters less and there is less for any dynamic rule to fix.
+Whether the *true* per-token contribution would help — i.e. whether the fault
+is the mean-scale proxy or the idea — is the oracle test (F24).
+
+---
+
+## F23 — The orthogonality-derived squared-share rule is worse than the linear heuristic on OLMoE
+
+OLMoE, 8,192 tokens, paired bootstrap, `contribution_sq` (renorm=False, squared
+share) vs `contribution` (linear share): **+1.2% [+0.0, +2.3]** at k′≈5,
+**+2.3% [+1.4, +3.4]** at k′≈4. The principled error model loses to the
+heuristic on the model where the heuristic works. Recorded; the linear rule
+stays as the method.
