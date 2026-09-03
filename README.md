@@ -24,7 +24,7 @@ Paired bootstrap, 16 sequences: contribution vs score-only **−3.0 % [−4.0, �
 
 ```bash
 scripts/setup_env.sh                          # .venv with the exact pinned versions (torch CPU wheel from PyTorch's index, rest from PyPI)
-.venv/bin/python -m pytest tests/ -q          # 36 tests
+.venv/bin/python -m pytest tests/ -q          # 37 tests
 scripts/reproduce.sh                          # everything, in order; ~8 h CPU total, one job at a time
 ```
 
@@ -58,7 +58,7 @@ scripts/                 validate_stream, policy_calib, policy_sweep, decode_ben
                          paired_bootstrap, reproduce.sh
 results/                 raw JSON/log outputs, calibration artefacts, ENV.md
 docs/                    FINDINGS.md (results), LOG.md (chronological), slides/, figures/
-tests/                   36 tests: policy exactness, engine round-trips, bootstrap, undefined-name check
+tests/                   37 tests: policy exactness, engine round-trips, bootstrap, undefined-name check
 ```
 
 ## Design rules
