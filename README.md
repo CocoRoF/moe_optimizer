@@ -96,9 +96,11 @@ by perplexity at matched mean experts-per-token k′. On OLMoE-1B-7B:
 median-threshold rule gives +309%. **On Qwen3-30B-A3B the same mechanism
 is a statistical tie with score-only** (F22: +0.4% [−1.7, +2.3] at k′=5, after
 fixing a calibration-starvation artefact that had made it a loss in F21), and
-both trail static top-k there. The result is a one-model positive; an oracle
-test (F24) is checking whether the per-token contribution signal helps on Qwen3
-at all or only the mean-scale proxy fails.
+both trail static top-k there. An oracle that keeps by the *true* per-token contribution (F24) ties the
+64-float proxy on OLMoE and is *worse* than score-only on Qwen3: on the
+renormalised router the contribution signal itself is not the right one. The
+router's renormalisation is the variable separating the two regimes; the
+counterfactual (Qwen3 with renormalisation off, F25) is queued.
 The router score is near-orthogonal to expert output magnitude on this model
 (r = +0.17), so ranking by score is ranking by noise; a calibrated per-expert
 output scale — 64 floats per layer, no training — recovers it.

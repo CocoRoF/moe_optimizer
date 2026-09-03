@@ -31,6 +31,7 @@ Every number here is reproducible from this repo on CPU. Commands are given.
 | F21 | Qwen3, 1K calibration: contribution **loses** to score-only (+5.3%/+6.7%) | Qwen3-30B | superseded by F22 |
 | F22 | Qwen3, 4K calibration: contribution vs score-only **+0.4% [−1.7, +2.3]** — a tie; renorm error model worse | Qwen3-30B | **null; one-model result** |
 | F23 | Squared-share variant worse than linear on OLMoE (+1.2%, +2.3%, significant) | OLMoE | heuristic stays |
+| F24 | Oracle ≈ proxy on OLMoE (+0.1% n.s.); oracle **worse** than score-only on Qwen3 (+5.1%) — the signal fails there, not the proxy | both | **regimes separated by router renormalisation** |
 
 ---
 
@@ -1198,3 +1199,64 @@ share) vs `contribution` (linear share): **+1.2% [+0.0, +2.3]** at k′≈5,
 **+2.3% [+1.4, +3.4]** at k′≈4. The principled error model loses to the
 heuristic on the model where the heuristic works. Recorded; the linear rule
 stays as the method.
+
+---
+
+## F24 — Oracle: on OLMoE the mean-scale proxy ≈ the true per-token contribution; on Qwen3 the *signal* fails
+
+```bash
+python3 scripts/policy_oracle.py Qwen/Qwen3-30B-A3B 4096 5
+python3 scripts/policy_oracle.py allenai/OLMoE-1B-7B-0924 4096 5
+```
+
+The oracle computes every routed expert and keeps by the true per-token
+w_e·‖E_e(x)‖ (renormalised on Qwen3). Not deployable — bytes are unchanged — it
+bounds what any contribution-based rule could achieve. τ bisected on realised k′.
+
+| | OLMoE-1B-7B | Qwen3-30B-A3B |
+|---|---|---|
+| top-8 | 10.333 | 11.879 |
+| score-only @5 | 11.643 (k′ 4.94) | 12.945 (k′ 5.00) |
+| contribution (mean scale) @5 | 11.338 (k′ 4.97) | 12.987 (k′ 5.03) |
+| **oracle** (true per-token) | **11.353 (k′ 4.63)** | **13.626 (k′ 4.79)** |
+| oracle vs score-only | **−2.5% [−4.2, −0.8]** | **+5.1% [+1.7, +9.9]** |
+| oracle vs contribution | +0.1% [−1.1, +1.4] n.s. | +4.8% [+2.6, +8.2] |
+| contribution vs score-only | **−2.6% [−4.1, −1.1]** | +0.3% [−1.8, +2.2] n.s. |
+
+**OLMoE.** The oracle ties the mean-scale proxy — at a *smaller* budget
+(4.63 vs 4.97). A 64-float calibrated scale per layer recovers the whole gain
+that knowing every expert's actual output would give. The proxy is not the
+limitation; this is the strongest form of the OLMoE result.
+
+**Qwen3.** The oracle is worse than score-only by more than its 4% budget
+shortfall explains (static top-5 → top-4 costs ~11% here, so 0.2 experts ≈
+2%; the remaining ~3% is real). Ranking by the true contribution *norm* does
+not help on this model and plausibly hurts. F22's null is therefore not a proxy
+problem (hypothesis i, rejected); the signal is the problem.
+
+**Why.** Qwen3 renormalises the kept weights (`norm_topk_prob=True`): dropping
+expert e does not remove the term w_e·y_e, it also rescales every survivor by
+W_all/W_P. The change in the layer's output then depends on the *directions* of
+the kept and dropped outputs, not just their norms — and expert outputs in this
+model class are only approximately orthogonal (whitened NN cosine median 0.40,
+F9-Qwen3). A norm-only ranking, mean or per-token, ignores that; the
+renormalisation-aware error model of F22 assumed exact orthogonality and also
+lost. On OLMoE (no renormalisation) removal is subtraction, and the norm is a
+sufficient proxy for it.
+
+This is a mechanistic explanation, not yet a measurement. The counterfactual
+that measures it — Qwen3's engine with renormalisation switched off, same
+policies — is F25.
+
+### Where the paper stands after F24
+
+- **Unnormalised router (OLMoE):** contribution ranking beats score-only by
+  2.5–3% (k′≈5) and 7% (k′≈4) with 95% intervals excluding zero; matches the
+  oracle; beats static top-k at k′≈4; degrades math/code less than text; 1.80×
+  decode speedup. The mean-scale proxy is sufficient.
+- **Renormalised router (Qwen3):** no norm-based rule — proxy, error model, or
+  oracle — beats score-only; static top-k dominates all dynamic rules.
+- **Claim:** calibrated output scale is a necessary and (up to the oracle)
+  sufficient correction to score-only skipping on unnormalised routers; on
+  renormalised routers the contribution signal is not the right one, and the
+  router's renormalisation is the variable that separates the two regimes.
