@@ -20,6 +20,12 @@ text = "\n\n".join(t for t in load_dataset("Salesforce/wikitext", "wikitext-2-ra
 ids = tok(text, return_tensors="pt").input_ids[0][:N]
 rm = resolve_model(MODEL, cache_dir=".cache", allow_download=False); store = ExpertStore(rm)
 
+def _per_layer_mean(per_layer_k, n_seq):
+    """per_layer_k is appended layer by layer for each sequence -> (n_seq, L) -> mean over sequences."""
+    L = len(per_layer_k) // max(n_seq, 1)
+    return [float(x) for x in torch.tensor(per_layer_k).view(n_seq, L).mean(0)] if L else []
+
+
 def run(policy):
     eng = _engine_cls(rm.config)(store, rm.config, policy=policy)
     ppl, st = eng.perplexity(ids, verbose=False)
@@ -27,7 +33,7 @@ def run(policy):
     r = {"policy": policy.name, "ppl": ppl, "mean_k": st.experts_per_token,
          "MB_per_tok": st.bytes_read / st.tokens / 1e6, "tok_per_s": st.tokens / st.seconds,
          "per_seq_nll": st.per_seq_nll,
-         "per_layer_k": [float(x) for x in torch.tensor(st.per_layer_k).view(-1, rm.arch.n_layers if False else len(st.per_layer_k) // max(len(st.per_seq_nll), 1)).mean(0)]}
+         "per_layer_k": _per_layer_mean(st.per_layer_k, len(st.per_seq_nll))}
     print(f"  {r['policy']:<22} ppl={ppl:8.3f}  k'={r['mean_k']:.2f}  {r['MB_per_tok']:6.1f} MB/tok  {r['tok_per_s']:.2f} tok/s", flush=True)
     return r
 

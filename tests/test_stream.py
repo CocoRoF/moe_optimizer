@@ -78,7 +78,7 @@ def test_renorm_policy_reduces_to_squared_share_without_renorm_and_penalises_dro
     _, w2 = ContributionRenormPolicy(5, scale, {0: float(err2) + 1e-6}, renorm=True).select(p, 0)
     assert (w2 > 0).sum() >= 3 and (w2 > 0).sum() > (w > 0).sum() - 1
     # tau=0 keeps everything; tau=1 keeps min_keep
-    assert (ContributionRenormPolicy(5, scale, {0: 0.0})[1] if False else (ContributionRenormPolicy(5, scale, {0: 0.0}).select(p, 0)[1] > 0).all())
+    assert (ContributionRenormPolicy(5, scale, {0: 0.0}).select(p, 0)[1] > 0).all()
     assert (ContributionRenormPolicy(5, scale, {0: 1.0}, min_keep=2).select(p, 0)[1] > 0).sum() == 2
 
 
