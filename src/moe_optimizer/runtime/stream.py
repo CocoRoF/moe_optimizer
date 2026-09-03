@@ -346,8 +346,13 @@ class StreamingQwen3MoE(StreamingOLMoE):
     ``moe_intermediate_size`` wide.  Tensor names are identical in form.
     """
 
-    def __init__(self, store, config, policy=None, dtype=torch.float32, threads: int = 11):
+    def __init__(self, store, config, policy=None, dtype=torch.float32, threads: int = 11,
+                 renorm: bool | None = None):
         super().__init__(store, config, policy, dtype, threads)
+        # F25 counterfactual: renorm=False runs Qwen3 *without* top-k renormalisation.
+        # This is a different model (its top-8 perplexity shifts); compare policies
+        # by degradation relative to its own top-8.
+        self.renorm = bool(config.get("norm_topk_prob", True)) if renorm is None else renorm
         self.hd = config.get("head_dim") or self.d // self.H
         self.KV = config["num_key_value_heads"]; self.groups = self.H // self.KV
         self.expert_bytes = 3 * config["moe_intermediate_size"] * self.d * 2
@@ -381,13 +386,15 @@ class StreamingQwen3MoE(StreamingOLMoE):
         probs = F.softmax((x @ self._g(p + "mlp.gate.weight").T).float(), -1)
         idx, w = self.policy.select(probs, l)
         # norm_topk_prob=True: renormalise over the experts actually kept
-        w = (w / w.sum(-1, keepdim=True).clamp_min(1e-12)).to(self.dtype)
+        if self.renorm:
+            w = w / w.sum(-1, keepdim=True).clamp_min(1e-12)
+        w = w.to(self.dtype)
         out = torch.zeros_like(x)
         used = idx[w > 0].unique()
         stats.expert_loads += used.numel(); stats.bytes_read += used.numel() * self.expert_bytes
         stats.per_layer_k.append(float((w > 0).sum(1).float().mean()))
         if self.oracle_tau is not None:
-            return h + self._oracle_moe(l, x, idx, w / w.sum(-1, keepdim=True).clamp_min(1e-12) if False else w, renorm=True)
+            return h + self._oracle_moe(l, x, idx, w, renorm=self.renorm)
         for e in used.tolist():
             slot_tok, slot_pos = torch.where(idx == e)
             we = w[slot_tok, slot_pos]; m = we > 0; slot_tok, we = slot_tok[m], we[m]

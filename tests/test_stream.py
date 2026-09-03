@@ -107,3 +107,14 @@ def test_oracle_keep_rule_matches_contribution_rule_on_known_norms():
     idx = torch.arange(5).unsqueeze(0); probs = torch.zeros(1, 5).scatter(1, idx, w)
     _, wk = ContributionPolicy(5, {0: norms[0]}, {0: 0.3}).select(probs, 0)
     assert torch.equal(wk > 0, oracle_keep)
+
+
+def test_qwen3_engine_renorm_flag_defaults_from_config():
+    from moe_optimizer.runtime.stream import StreamingQwen3MoE
+    class S:  # minimal store stand-in: only what __init__ touches
+        def get(self, k): return torch.zeros(4, 8)
+    cfg = {"num_hidden_layers": 1, "num_experts": 4, "num_experts_per_tok": 2, "hidden_size": 8,
+           "num_attention_heads": 2, "num_key_value_heads": 1, "head_dim": 4, "intermediate_size": 8,
+           "moe_intermediate_size": 8, "norm_topk_prob": True}
+    assert StreamingQwen3MoE(S(), cfg, threads=1).renorm is True
+    assert StreamingQwen3MoE(S(), cfg, threads=1, renorm=False).renorm is False
