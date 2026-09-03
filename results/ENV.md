@@ -11,7 +11,7 @@
 | torch | 2.14.0+cpu |
 | transformers | 5.16.1 |
 | safetensors / datasets / numpy | 0.8.0 / 5.0.1 / 2.5.2 |
-| full lock | `requirements-lock.txt` (`uv pip install -r requirements-lock.txt`) |
+| full lock | `requirements-lock.txt`; install with `scripts/setup_env.sh` (torch from the PyTorch CPU index, the rest from PyPI — a single mixed-index resolve fails). Verified on a fresh clone: 36/36 tests pass. |
 
 ## Model checkpoints (HF Hub snapshot commit)
 
