@@ -9,18 +9,20 @@ import sys, time, torch
 sys.path.insert(0, "src"); torch.set_num_threads(11)
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from moe_optimizer.io.checkpoint import ExpertStore, resolve_model
-from moe_optimizer.runtime.stream import StreamingOLMoE
-MODEL = "allenai/OLMoE-1B-7B-0924"
+from moe_optimizer.runtime.stream import StreamingOLMoE, StreamingQwen3MoE
+MODEL = sys.argv[1] if len(sys.argv) > 1 else "allenai/OLMoE-1B-7B-0924"
+CPU_MEM = sys.argv[2] if len(sys.argv) > 2 else "6GiB"
 tok = AutoTokenizer.from_pretrained(MODEL, cache_dir=".cache")
 ids = tok("The Mixture-of-Experts architecture routes each token to a small subset of experts, "
           "so the memory traffic per token depends on how many experts are actually loaded.",
           return_tensors="pt").input_ids[0][:48]
 rm = resolve_model(MODEL, cache_dir=".cache", allow_download=False)
-eng = StreamingOLMoE(ExpertStore(rm), rm.config, dtype=torch.float32)
+Engine = StreamingQwen3MoE if rm.config.get("model_type", "").startswith("qwen") else StreamingOLMoE
+eng = Engine(ExpertStore(rm), rm.config, dtype=torch.float32)
 t0 = time.time(); lg_s, st = eng.forward(ids); print(f"stream: {ids.numel()} tok in {time.time()-t0:.1f}s, k'={st.experts_per_token:.2f}, {st.bytes_read/ids.numel()/1e6:.1f} MB/tok", flush=True)
 del eng
 ref = AutoModelForCausalLM.from_pretrained(MODEL, dtype=torch.bfloat16, cache_dir=".cache", low_cpu_mem_usage=True,
-        device_map="auto", max_memory={"cpu": "6GiB"}, offload_folder="runs/offload_olmoe", offload_state_dict=True).eval()
+        device_map="auto", max_memory={"cpu": CPU_MEM}, offload_folder=f"runs/offload_{MODEL.split('/')[-1]}", offload_state_dict=True).eval()
 with torch.no_grad(): lg_r = ref(ids.unsqueeze(0)).logits[0].float()
 d = (lg_s - lg_r); top_agree = (lg_s.argmax(-1) == lg_r.argmax(-1)).float().mean().item()
 ref_bf16_noise = (lg_r - lg_r.to(torch.bfloat16).float()).abs().max().item()
