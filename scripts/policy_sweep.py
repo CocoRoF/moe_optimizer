@@ -1,5 +1,5 @@
 """E2/E3: perplexity, mean k', bytes/token, tok/s for every policy at matched target k'."""
-import sys, json, time, torch
+import sys, json, time, gc, torch
 sys.path.insert(0, "src")
 from datasets import load_dataset
 from transformers import AutoTokenizer

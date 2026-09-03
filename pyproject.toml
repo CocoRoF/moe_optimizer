@@ -14,7 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 eval = ["transformers>=4.44", "datasets>=2.20", "lm-eval>=0.4"]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "pyflakes>=3"]
 
 [project.scripts]
 moeopt = "moe_optimizer.cli:main"

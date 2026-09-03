@@ -54,3 +54,14 @@ def test_paired_bootstrap_flags_a_real_difference_and_not_noise():
     out = subprocess.run([sys.executable, "scripts/paired_bootstrap.py", f.name], capture_output=True, text=True).stdout
     assert "k'~4.0: contribution vs score-only" in out and "SIGNIFICANT" in out.split("k'~4.0: contribution vs score-only")[1].split("\n")[0]
     assert "n.s." in out.split("k'~6.0: contribution vs score-only")[1].split("\n")[0]
+
+
+def test_scripts_and_package_have_no_undefined_names():
+    """The 8K confirmation and the Qwen3 sweep both crashed on a NameError that
+    ast.parse cannot see.  pyflakes can."""
+    import subprocess, sys, pathlib
+    root = pathlib.Path(__file__).resolve().parents[1]
+    files = [str(p) for p in (root / "scripts").glob("*.py")] + [str(p) for p in (root / "src").rglob("*.py")]
+    out = subprocess.run([sys.executable, "-m", "pyflakes", *files], capture_output=True, text=True).stdout
+    bad = [l for l in out.splitlines() if "undefined name" in l]
+    assert not bad, "\n".join(bad)
