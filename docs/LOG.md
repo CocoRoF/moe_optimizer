@@ -1260,3 +1260,13 @@ policies — is F25.
   sufficient correction to score-only skipping on unnormalised routers; on
   renormalised routers the contribution signal is not the right one, and the
   router's renormalisation is the variable that separates the two regimes.
+
+---
+
+## F25 — Qwen3 with top-k renormalisation switched off (2026-09-03)
+
+Counterfactual `StreamingQwen3MoE(renorm=False)`, 4,096 tokens, k′=5. The unmodified model's top-8 perplexity becomes 42.9 (vs 11.879): raw top-8 probabilities sum to ≈0.35, so every MoE output is scaled by ~⅓. Within that model, contribution vs score-only −40.3 % [−72.8, −4.7], vs static −34.0 % [−62.6, −0.8]. Direction as predicted by F24's explanation; confounded by the model being far from its operating point. Recorded as supporting, not conclusive. Clean version (renormalise to the full top-k mass, `renorm="full"`) queued as F25b.
+
+## F26 — Qwen3 batch-1 decode (2026-09-03)
+
+57 GB of shards vs ~10 GB page cache: every layer read is an NVMe read (~700 MB/s, 28 % iowait). top-8 5436 MB/tok at 0.28 tok/s; contribution@5 4030 MB/tok at 0.42 tok/s. Bytes linear in k′. Cache-consistency 0.000 on all skipping rows, 0.106 on the top-8 row (0.3 % of logit scale). The curated results document (`docs/FINDINGS.md`) is now the live record; this log is frozen after this entry except for F25b.
