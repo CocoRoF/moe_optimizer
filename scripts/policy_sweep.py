@@ -1,11 +1,11 @@
 """E2/E3: perplexity, mean k', bytes/token, tok/s for every policy at matched target k'."""
-import sys, json, time, gc, torch
+import sys, json, gc, torch
 sys.path.insert(0, "src")
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from moe_optimizer.io.checkpoint import ExpertStore, resolve_model
-from moe_optimizer.runtime.stream import StreamingOLMoE, TopKPolicy, MassRatioPolicy, ContributionPolicy, ContributionRenormPolicy
-from moe_optimizer.runtime.calibrate import calibrate_taus, calibrate_taus_err, cumulative_share, mass_ratio_medians
+from moe_optimizer.runtime.stream import TopKPolicy, MassRatioPolicy, ContributionPolicy, ContributionRenormPolicy
+from moe_optimizer.runtime.calibrate import calibrate_taus, calibrate_taus_err
 MODEL = next((a for a in sys.argv[1:] if "/" in a), "allenai/OLMoE-1B-7B-0924")
 ARGS = [a for a in sys.argv[1:] if "/" not in a]
 SHORT = MODEL.split("/")[-1].split("-")[0].lower()          # olmoe | qwen3
