@@ -92,3 +92,18 @@ def test_error_model_tau_calibration_hits_target_k():
         err = error_curve(tr, sc, ix, renorm)[0]; ok = err <= tau[0]; ok[:, -1] = True
         mean_k = float((ok.float().argmax(1) + 1).float().mean())
         assert abs(mean_k - 5.0) < 0.15, (renorm, mean_k)
+
+
+def test_oracle_keep_rule_matches_contribution_rule_on_known_norms():
+    """With the engine's oracle share rule fed known norms, the keep-set equals
+    ContributionPolicy's on scale=norm -- same criterion, exact signal."""
+    import torch
+    from moe_optimizer.runtime.stream import ContributionPolicy
+    w = torch.tensor([[0.3, 0.25, 0.2, 0.15, 0.1]]); norms = torch.tensor([[1.0, 0.2, 3.0, 0.5, 0.1]])
+    c = w * norms; c_sorted, order = c.sort(-1, descending=True)
+    share = (c_sorted / c_sorted.sum()).cumsum(-1); thr = 1 - 0.3
+    keep_sorted = torch.cat([torch.ones_like(share[:, :1], dtype=torch.bool), share[:, :-1] < thr], 1)
+    oracle_keep = torch.zeros_like(keep_sorted).scatter(1, order, keep_sorted)
+    idx = torch.arange(5).unsqueeze(0); probs = torch.zeros(1, 5).scatter(1, idx, w)
+    _, wk = ContributionPolicy(5, {0: norms[0]}, {0: 0.3}).select(probs, 0)
+    assert torch.equal(wk > 0, oracle_keep)

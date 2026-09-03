@@ -202,6 +202,13 @@ class StreamingOLMoE:
         self.final_norm = self._g("model.norm.weight")
         self.lm_head = self._g("lm_head.weight")
         self.record_output_norms: dict[int, torch.Tensor] | None = None
+        # Diagnostic only (F24): when set, every routed expert is computed and the
+        # keep-set is chosen by the *true* per-token contribution w_e * ||E_e(x)||
+        # (renormalised if the router does) instead of a calibrated mean scale.
+        # Bytes/token are unchanged -- this isolates "is the signal useful at all"
+        # from "is the mean-scale proxy good enough".  oracle_tau: per-layer tau.
+        self.oracle_tau: dict[int, float] | None = None
+        self.oracle_min_keep = 1
 
     # ---- primitives ------------------------------------------------------
     def _rms(self, x, w):
@@ -252,6 +259,8 @@ class StreamingOLMoE:
         used = idx[w > 0].unique()
         stats.expert_loads += used.numel(); stats.bytes_read += used.numel() * self.expert_bytes
         stats.per_layer_k.append(float((w > 0).sum(1).float().mean()))
+        if self.oracle_tau is not None:
+            return h + self._oracle_moe(l, x, idx, w)
         for e in used.tolist():
             slot_tok, slot_pos = torch.where(idx == e)
             we = w[slot_tok, slot_pos]
@@ -267,6 +276,30 @@ class StreamingOLMoE:
                 self.record_output_norms[l][e, 1] += y.shape[0]
             out.index_add_(0, slot_tok, y * we.unsqueeze(1))
         return h + out
+
+    def _oracle_moe(self, l, x, idx, w, renorm: bool = False):
+        """Compute all routed experts; keep the smallest prefix (by true w*||y||)
+        whose contribution share reaches 1 - tau; sum only the kept ones."""
+        T, k = idx.shape
+        ys = torch.zeros((T, k, x.shape[1]), dtype=self.dtype)
+        for e in idx.unique().tolist():
+            slot_tok, slot_pos = torch.where(idx == e)
+            xe = x[slot_tok]
+            g = xe @ self.store.expert(Slot(l, "gate"), e).to(self.dtype).T
+            u = xe @ self.store.expert(Slot(l, "up"), e).to(self.dtype).T
+            ys[slot_tok, slot_pos] = (F.silu(g) * u) @ self.store.expert(Slot(l, "down"), e).to(self.dtype).T
+        c = w * ys.norm(dim=-1)                                   # true per-token contribution
+        c_sorted, order = c.sort(-1, descending=True)
+        share = (c_sorted / c_sorted.sum(-1, keepdim=True).clamp_min(1e-12)).cumsum(-1)
+        thr = 1.0 - self.oracle_tau.get(l, 0.0)
+        keep_sorted = torch.cat([torch.ones_like(share[:, :1], dtype=torch.bool), share[:, :-1] < thr], 1)
+        keep_sorted[:, : self.oracle_min_keep] = True
+        keep = torch.zeros_like(keep_sorted).scatter(1, order, keep_sorted)
+        w_kept = w * keep
+        if renorm:
+            w_kept = w_kept / w_kept.sum(-1, keepdim=True).clamp_min(1e-12)
+        self._oracle_k = getattr(self, "_oracle_k", []); self._oracle_k.append(float(keep.sum(1).float().mean()))
+        return (ys * w_kept.unsqueeze(-1)).sum(1)
 
     # ---- public ----------------------------------------------------------
     @torch.no_grad()
@@ -353,6 +386,8 @@ class StreamingQwen3MoE(StreamingOLMoE):
         used = idx[w > 0].unique()
         stats.expert_loads += used.numel(); stats.bytes_read += used.numel() * self.expert_bytes
         stats.per_layer_k.append(float((w > 0).sum(1).float().mean()))
+        if self.oracle_tau is not None:
+            return h + self._oracle_moe(l, x, idx, w / w.sum(-1, keepdim=True).clamp_min(1e-12) if False else w, renorm=True)
         for e in used.tolist():
             slot_tok, slot_pos = torch.where(idx == e)
             we = w[slot_tok, slot_pos]; m = we > 0; slot_tok, we = slot_tok[m], we[m]
