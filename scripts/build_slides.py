@@ -161,7 +161,7 @@ table(s, [["policy (k′=5, 4,096 token)", "Δ ppl vs top-8 11.879"], ["정적 t
 bullets(s, ["contribution vs score-only: +0.4 % [−1.7, +2.3] — 동률 (1,024-token 캘리브레이션에서는 +5.3 % 손실 → 4배로 해소: calibration starvation)",
             "budget hogging 기각(층별 k′ 4.9–5.2 평탄) · renorm 오차모델 오히려 악화 · oracle도 실패",
             "해석: norm_topk_prob=True → expert 하나를 빼면 생존자 전부가 W_all/W_P로 재조정. 출력 변화는 방향에 의존하고, expert 출력은 근사 직교일 뿐(whitened NN cos 0.40)",
-            "OLMoE(renorm 없음)에서는 제거 = 뺄셈 → norm이 충분한 proxy", "반사실(Qwen3 renorm off, F25) 실행 중 — 이 설명을 측정으로 바꾼다"], left=6.8, top=1.3, width=6.2, height=5.5, size=12)
+            "OLMoE(renorm 없음)에서는 제거 = 뺄셈 → norm이 충분한 proxy", "반사실 F25 (renorm off): contribution −40 % [−73, −5] vs score-only — 방향은 예측대로, 단 그 모델 자체가 ppl 42.9(4×)로 손상 → 지지 증거이지 확증 아님", "깨끗한 반사실 F25b (full-mass renorm; top-8 동일, 제거 = 뺄셈) 실행 중"], left=6.8, top=1.3, width=6.2, height=5.5, size=12)
 # ---- 기여·한계·향후
 section("연구의 기여점 및 향후 연구 방향")
 s = title_only("기여")

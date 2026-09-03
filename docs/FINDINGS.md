@@ -184,6 +184,29 @@ This work: OLMoE-1B-7B, batch-1, training-free — 38 % fewer expert loads (k′
 
 Bytes/token are linear in k′ here too (48 layers × k′ × 3 × 768×2048 fp32 ≈ 19 MB per expert per token). Cache-consistency (max |Δlogit| cached vs uncached) is 0.000 for every skipping row and **0.106 for the top-8 row** — 0.3 % of the logit scale (30.9), consistent with fp32 summation-order differences between the batched prefill and single-token paths accumulating over 48 layers; it is reported rather than hidden, and it does not affect the bytes or speed columns. Perplexity in this table is a 47-token sanity check, not a quality result — see §7 for Qwen3 quality.
 
+## 12. Counterfactual: Qwen3 without top-k renormalisation (F25) — directionally right, confounded
+
+```bash
+python3 scripts/policy_sweep.py Qwen/Qwen3-30B-A3B 4096 5 --no-renorm
+```
+
+`StreamingQwen3MoE(renorm=False)`: kept weights are the raw top-8 softmax probabilities, as on OLMoE.
+
+| policy | k′ | ppl |
+|---|---:|---:|
+| top-8 (this counterfactual model) | 8.00 | **42.892** (vs 11.879 with renormalisation) |
+| static top-5 | 5.00 | 154.4 |
+| score-only @5 | 5.09 | 173.4 |
+| **contribution @5** | 5.04 | **100.2** |
+| contribution_sq @5 | 5.02 | 117.5 |
+| mass-ratio (median) | 4.21 | 1651 |
+
+Paired bootstrap (8 sequences): contribution vs score-only **−40.3 % [−72.8, −4.7]**; vs static **−34.0 % [−62.6, −0.8]**.
+
+**Reading, carefully.** The direction is what §7 predicts — once expert removal is pure subtraction, contribution ranking wins on Qwen3 too, and by a wide margin. But this counterfactual is confounded: Qwen3 was trained with renormalised weights, and the raw top-8 probabilities sum to ≈0.35, so switching renormalisation off scales every MoE output by ~⅓ and quadruples the *unmodified* model's perplexity. Differences measured inside a model that far from its operating point may reflect instability rather than the ranking signal; the 70-point intervals say as much. **This is supporting, not conclusive.**
+
+The clean counterfactual is F25b: renormalise to the **full** top-8 mass W_all instead of the kept mass W_P. The unmodified model is then bit-identical to the real Qwen3 (top-8 = 11.879), and dropping an expert is subtraction of its term with no rescaling of the survivors. Queued.
+
 ## Pending
 
-F25 — Qwen3 without top-k renormalisation (counterfactual for §7), running (`scripts/reproduce.sh` step 7).
+F25b — Qwen3 with `renorm="full"` (clean counterfactual for §7 / §12).
