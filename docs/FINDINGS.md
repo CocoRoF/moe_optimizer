@@ -20,6 +20,9 @@ Every number here is reproducible from this repo on CPU. Commands are given.
 | F11b | Residual/neuron split replicates 3/3; neuron side at chance to 3 dp | Qwen3-30B | **F2 is a two-model result** |
 | F12 / F12b | Whitened per-expert SVD: ×1.62 at 75%, ×2.47 at 56%; full `down` covariance changes nothing | OLMoE | **low-rank closed, sharing or not** |
 | F8/F9-Qwen3 | Whitened neuron-NN median 0.404 (gate 0.5, predicted 0.45–0.50); 1–2 shared directions of 64 in the middle band | Qwen3-30B | **branch 2 on both models** |
+| F13 | Streaming CPU engine reproduces the reference (100% top-1, NLL 3.207 vs 3.212) at ~3 GB | OLMoE | tool |
+| F14 | Expert output scale: within-layer CV 0.26, r with gate weight +0.17 — G1 passes | OLMoE | W1 measured |
+| F15 | Contribution skipping beats score-only by −0.9/−3.0/**−8.5%** ppl at k′≈6/5/4; score-only loses to static; median rule → ppl 40.8 | OLMoE | **mechanism supported** |
 
 ---
 
@@ -879,3 +882,65 @@ mass" rows normalised over all 64 experts and are meaningless for a model with
 `norm_topk_prob=False`; fixed in the script, not used by the sweep.)
 
 E2 was launched automatically by the G1 rule.
+
+---
+
+## F15 — E2: contribution-calibrated skipping beats score-only at every budget, and the gap widens
+
+```bash
+python3 scripts/policy_sweep.py allenai/OLMoE-1B-7B-0924 2048 6,5,4
+```
+
+OLMoE-1B-7B, 2,048 WikiText-2 test tokens, streaming engine, prefill.
+All dynamic rules calibrated on the E1 tokens (F14). Baselines and ours at
+**matched mean k′**; `score_only` is `contribution` with every scale set to 1 —
+same threshold search, same code path, ranking by gate weight alone.
+
+| policy | k′ | perplexity | vs top-8 |
+|---|---:|---:|---:|
+| top-8 (reference) | 8.00 | 9.548 | — |
+| **mass-ratio, per-layer median** (arXiv:2512.21911 rule) | 3.08 | **40.823** | +328% |
+| static top-6 | 6.00 | 9.860 | +3.3% |
+| score-only @6 | 5.92 | 10.003 | +4.8% |
+| **contribution @6** | 5.94 | **9.908** | +3.8% |
+| static top-5 | 5.00 | 10.509 | +10.1% |
+| score-only @5 | 4.91 | 10.807 | +13.2% |
+| **contribution @5** | 4.92 | **10.479** | +9.8% |
+| static top-4 | 4.00 | 12.093 | +26.6% |
+| score-only @4 | 3.90 | 12.874 | +34.8% |
+| **contribution @4** | 3.92 | **11.784** | +23.4% |
+
+### Three things this establishes
+
+**Contribution ranking beats score ranking, and more so the harder you skip:**
+−0.9% (k′≈6), −3.0% (k′≈5), **−8.5%** (k′≈4) perplexity at matched k′. The
+E4 rule (≥ 2 of 3) passes 3/3.
+
+**Score-only dynamic skipping is worse than not skipping dynamically at all.**
+At every budget the fair score-only rule loses to a static top-k cut
+(+4.8 vs +3.3, +13.2 vs +10.1, +34.8 vs +26.6). On a model whose router
+score is near-orthogonal to expert output magnitude (F14, r = +0.17), a
+token-adaptive rule that ranks by score is ranking by noise. Contribution
+ranking recovers that and passes static at k′≈5 (−0.3%) and k′≈4 (−2.6%).
+**All of the gain from dynamic skipping on this model comes from the calibrated
+output scale, none from token-adaptivity by itself.**
+
+**The published training-free rule collapses the model.** Per-layer median
+thresholds skip 62% of experts on OLMoE's flat routing and take perplexity to
+40.8. This is the rule's design (a fixed 50% skip rate per skip size, no quality
+target), not a tuning accident, and it is why the paper's own m=4 setting
+degraded math on DeepSeek-R1.
+
+### Caveats, stated before anyone else does
+
+- 2,048 tokens, one seed, one model. The k′≈6 margin (−0.9%) is within noise;
+  the k′≈4 margin (−8.5%) is not. An 8,192-token confirmation is queued.
+- These are prefill numbers. `MB/tok` is amortised over the sequence and `tok/s`
+  is dominated by fp32 conversion churn (the 9.93 outlier is system contention);
+  neither is the E3 metric. Batch-1 decode bandwidth is measured separately
+  (`decode_benchmark`, chain running).
+- Absolute cost is real: the best training-free rule pays +9.8% perplexity for
+  37.5% fewer expert loads and +23% for 51%. ZEDA (arXiv:2605.18643) reports
+  ~50% fewer expert operations at minimal loss *with* self-distillation training;
+  training buys a lot here, and this result does not close that gap — it
+  roughly triples the quality-per-skip of the training-free rule it replaces.

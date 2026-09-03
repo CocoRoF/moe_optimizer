@@ -1,6 +1,9 @@
 # moe_optimizer
 
-Training-free structural compression of pretrained Mixture-of-Experts LLMs.
+Training-free inference optimization for pretrained Mixture-of-Experts LLMs —
+currently: contribution-calibrated dynamic expert skipping on a bandwidth-bound
+streaming decoder. (The repo began as a structural-compression study; that
+line was closed by measurement — see `docs/FINDINGS.md` F1–F12.)
 
 The goal is to re-represent the expert weight table of an **already-trained** MoE
 so that a serving system does not have to hold every expert in memory — without
@@ -75,6 +78,23 @@ single low-degree polynomial across all layers is not supported. See
 [`docs/FINDINGS.md`](docs/FINDINGS.md) for the full table and consequences,
 including two findings (F3, F4) about estimator design that came out of
 validation.
+
+## Current result (F13–F15)
+
+A layer-streaming CPU decoder (`runtime/stream.py`, ~3 GB resident, validated
+against the HF model at 100% top-1 agreement) scores expert-skipping policies
+by perplexity at matched mean experts-per-token k′. On OLMoE-1B-7B:
+
+| policy | k′≈6 | k′≈5 | k′≈4 |
+|---|---:|---:|---:|
+| static top-k | +3.3% | +10.1% | +26.6% |
+| score-only dynamic (Lu et al. 2024 / arXiv:2512.21911 family, fair k′) | +4.8% | +13.2% | +34.8% |
+| **contribution-calibrated dynamic (ours)** | **+3.8%** | **+9.8%** | **+23.4%** |
+
+(perplexity vs top-8). The published median-threshold rule gives +328%.
+The router score is near-orthogonal to expert output magnitude on this model
+(r = +0.17), so ranking by score is ranking by noise; a calibrated per-expert
+output scale — 64 floats per layer, no training — recovers it.
 
 ## Two negative results already on the board
 
