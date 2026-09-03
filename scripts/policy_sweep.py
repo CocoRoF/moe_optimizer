@@ -25,7 +25,8 @@ def run(policy):
     ppl, st = eng.perplexity(ids, verbose=False)
     del eng; gc.collect()
     r = {"policy": policy.name, "ppl": ppl, "mean_k": st.experts_per_token,
-         "MB_per_tok": st.bytes_read / st.tokens / 1e6, "tok_per_s": st.tokens / st.seconds}
+         "MB_per_tok": st.bytes_read / st.tokens / 1e6, "tok_per_s": st.tokens / st.seconds,
+         "per_seq_nll": st.per_seq_nll}
     print(f"  {r['policy']:<22} ppl={ppl:8.3f}  k'={r['mean_k']:.2f}  {r['MB_per_tok']:6.1f} MB/tok  {r['tok_per_s']:.2f} tok/s", flush=True)
     return r
 

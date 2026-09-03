@@ -136,6 +136,7 @@ class StepStats:
     experts_per_token: float = 0.0   # mean k' over tokens and layers
     seconds: float = 0.0
     per_layer_k: list = field(default_factory=list)
+    per_seq_nll: list = field(default_factory=list)
 
 
 class StreamingOLMoE:
@@ -241,9 +242,12 @@ class StreamingOLMoE:
     def perplexity(self, ids: torch.Tensor, seq_len: int = 512, verbose=True) -> tuple[float, StepStats]:
         n = ids.numel() // seq_len; ids = ids[: n * seq_len].view(n, seq_len)
         nll = 0.0; cnt = 0; tot = StepStats(); t0 = time.perf_counter()
+        tot.per_seq_nll = []                      # per-sequence mean NLL, for paired bootstrap
         for i in range(n):
             lg, st = self.forward(ids[i])
-            nll += F.cross_entropy(lg[:-1], ids[i, 1:], reduction="sum").item(); cnt += seq_len - 1
+            s_nll = F.cross_entropy(lg[:-1], ids[i, 1:], reduction="sum").item()
+            tot.per_seq_nll.append(s_nll / (seq_len - 1))
+            nll += s_nll; cnt += seq_len - 1
             tot.tokens += st.tokens; tot.bytes_read += st.bytes_read; tot.expert_loads += st.expert_loads
             tot.per_layer_k += st.per_layer_k
             if verbose:

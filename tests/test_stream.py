@@ -39,3 +39,18 @@ def test_contribution_tau_zero_keeps_all_and_min_keep_holds():
     assert (w > 0).all()
     _, w = ContributionPolicy(8, scale, {0: 0.999}, min_keep=2).select(p, 0)
     assert ((w > 0).sum(1) >= 2).all()
+
+
+def test_paired_bootstrap_flags_a_real_difference_and_not_noise():
+    import json, subprocess, sys, tempfile, random
+    random.seed(1)
+    base = [random.gauss(2.3, 0.2) for _ in range(16)]
+    rows = [{"policy": "contribution@k'=4.0", "per_seq_nll": [x - 0.08 for x in base]},
+            {"policy": "score_only@k'=4.0", "per_seq_nll": base},
+            {"policy": "top4(static)", "per_seq_nll": [x + random.gauss(0, 0.01) for x in base]},
+            {"policy": "contribution@k'=6.0", "per_seq_nll": [x + random.gauss(0, 0.05) for x in base]},
+            {"policy": "score_only@k'=6.0", "per_seq_nll": base}]
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f: json.dump(rows, f)
+    out = subprocess.run([sys.executable, "scripts/paired_bootstrap.py", f.name], capture_output=True, text=True).stdout
+    assert "k'~4.0: contribution vs score-only" in out and "SIGNIFICANT" in out.split("k'~4.0: contribution vs score-only")[1].split("\n")[0]
+    assert "n.s." in out.split("k'~6.0: contribution vs score-only")[1].split("\n")[0]
