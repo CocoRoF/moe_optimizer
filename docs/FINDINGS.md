@@ -170,6 +170,20 @@ This work: OLMoE-1B-7B, batch-1, training-free — 38 % fewer expert loads (k′
 5. **The two principled variants lost.** The orthogonality-derived error model and the renormalisation-aware rule are both worse than the linear heuristic on both models (F22, F23).
 6. **Routing profile.** Both base models are flat within the top-8; instruct/reasoning models with a "certain head" (arXiv:2602.02443) may leave less for any dynamic rule to fix — unmeasured.
 
+## 11. Qwen3 batch-1 decode — the disk-bound regime (F26)
+
+32-token prompt, 48 steps, KV cache. Qwen3's 57 GB of shards do not fit in this machine's page cache (~10 GB), so **every layer read is an NVMe read** (measured ~700 MB/s, 28 % iowait) — the most extreme bandwidth-bound regime, not a compute-bound one. Absolute tok/s is therefore low; the *relation* is what the table tests.
+
+| policy | k′ | MB / token | expert loads / token | tok/s | speedup |
+|---|---:|---:|---:|---:|---:|
+| top8 | 8.00 | 5436 | 384.0 | 0.28 | 1.00× |
+| mass_ratio(median) | 3.91 | 3582 | 187.5 | 0.45 | 1.59× |
+| top5(static) | 5.00 | 4077 | 240.0 | 0.36 | 1.26× |
+| score_only@5.0 | 4.85 | 4007 | 232.6 | 0.39 | 1.36× |
+| contribution@5.0 | 4.90 | 4030 | 235.0 | 0.42 | 1.49× |
+
+Bytes/token are linear in k′ here too (48 layers × k′ × 3 × 768×2048 fp32 ≈ 19 MB per expert per token). Cache path exact (0.000). Perplexity in this table is a 47-token sanity check, not a quality result — see §7 for Qwen3 quality.
+
 ## Pending
 
-F25 — Qwen3 without top-k renormalisation (counterfactual for §7). F26 — Qwen3 batch-1 decode bandwidth (counterpart to §3). Both running via `scripts/reproduce.sh` steps 4 and 7.
+F25 — Qwen3 without top-k renormalisation (counterfactual for §7), running (`scripts/reproduce.sh` step 7).

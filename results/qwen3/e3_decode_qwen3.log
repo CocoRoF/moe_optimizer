@@ -1,0 +1,6 @@
+  top8                   k'=8.00  5435.8 MB/tok  384.0 loads/tok  0.28 tok/s  decode-ppl=5.13  cache-check=0.106
+  mass_ratio(median)     k'=3.91  3581.6 MB/tok  187.5 loads/tok  0.45 tok/s  decode-ppl=54.85  cache-check=0.000
+  top5(static)           k'=5.00  4076.9 MB/tok  240.0 loads/tok  0.36 tok/s  decode-ppl=6.23  cache-check=0.000
+  score_only@5.0         k'=4.85  4007.3 MB/tok  232.6 loads/tok  0.39 tok/s  decode-ppl=8.02  cache-check=0.000
+  contribution@5.0       k'=4.90  4029.7 MB/tok  235.0 loads/tok  0.42 tok/s  decode-ppl=6.29  cache-check=0.000
+DONE
