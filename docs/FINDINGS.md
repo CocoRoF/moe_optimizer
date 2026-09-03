@@ -22,7 +22,9 @@ Every number here is reproducible from this repo on CPU. Commands are given.
 | F8/F9-Qwen3 | Whitened neuron-NN median 0.404 (gate 0.5, predicted 0.45–0.50); 1–2 shared directions of 64 in the middle band | Qwen3-30B | **branch 2 on both models** |
 | F13 | Streaming CPU engine reproduces the reference (100% top-1, NLL 3.207 vs 3.212) at ~3 GB | OLMoE | tool |
 | F14 | Expert output scale: within-layer CV 0.26, r with gate weight +0.17 — G1 passes | OLMoE | W1 measured |
-| F15 | Contribution skipping beats score-only by −0.9/−3.0/**−8.5%** ppl at k′≈6/5/4; score-only loses to static; median rule → ppl 40.8 | OLMoE | **mechanism supported** |
+| F15 | Contribution skipping beats score-only by −0.9/−3.0/**−8.5%** ppl at k′≈6/5/4; score-only loses to static; median rule → ppl 40.8 | OLMoE | **mechanism supported** (2K tokens; 8K confirmation queued) |
+| F16 | Batch-1 decode: bytes/token linear in k′, **1.80× tok/s at k′≈5**, cache path exact; its 63-token ppl column is noise | OLMoE | W3 answered |
+| F17 | Qwen3-30B-A3B streaming engine validates (100% top-1, NLL 3.508 vs 3.503) | Qwen3-30B | tool |
 
 ---
 
@@ -944,3 +946,50 @@ degraded math on DeepSeek-R1.
   ~50% fewer expert operations at minimal loss *with* self-distillation training;
   training buys a lot here, and this result does not close that gap — it
   roughly triples the quality-per-skip of the training-free rule it replaces.
+
+---
+
+## F16 — E3: batch-1 decode bandwidth scales linearly with k′; 1.8× decode speedup at k′≈5
+
+```bash
+python3 scripts/decode_bench.py allenai/OLMoE-1B-7B-0924 64 6,5,4
+```
+
+One token per forward through the KV cache, 32-token prompt, 64 steps. The
+cached path reproduces the uncached logits exactly (max |Δlogit| 0.000 for
+every policy).
+
+| policy | k′ | MB / token | expert loads / token | tok/s | vs top-8 |
+|---|---:|---:|---:|---:|---:|
+| top-8 | 8.00 | 2148 | 128.0 | 1.86 | 1.00× |
+| mass-ratio (median) | 2.67 | 1074 | 42.6 | 4.17 | 2.24× (model destroyed) |
+| static top-6 | 6.00 | 1745 | 96.0 | 2.82 | 1.52× |
+| contribution @6 | 5.90 | 1726 | 94.5 | 2.81 | 1.51× |
+| static top-5 | 5.00 | 1544 | 80.0 | 3.32 | 1.78× |
+| **contribution @5** | 4.89 | 1521 | 78.2 | **3.35** | **1.80×** |
+| static top-4 | 4.00 | 1342 | 64.0 | 2.58 | 1.39× |
+| contribution @4 | 3.87 | 1316 | 61.9 | 3.02 | 1.62× |
+
+Bytes per token are `16 layers × k′ × 3 matrices × 2048×1024 fp32` plus
+attention: **each expert skipped saves ~16.8 MB per token, and the relation is
+exactly linear** — the property the survey's W3 said no prior work measured in
+this regime. Speed follows bytes (the top-4 row's 2.58 tok/s is system
+contention; its bytes are on the line).
+
+**On the `decode-ppl` column — do not read it as a quality result.** It is 63
+predictions on one easy slice (values 7.4–9.8 against E2's 9.5–12.9 on 2,048
+tokens) and it does *not* reproduce E2's ordering at k′≈4 (contribution 9.81
+vs score-only 9.59). It was included as a sanity check of the cache path and
+is far below the sample size where a 3–8% perplexity margin is resolvable.
+The quality comparison rests on E2 and on the 8,192-token confirmation queued
+behind the Qwen3 replication — which this column makes decisive, not optional.
+
+---
+
+## F17 — The Qwen3-30B-A3B streaming engine validates
+
+`StreamingQwen3MoE` (GQA 32/4, per-head QK-norm, θ = 1e6, renormalised top-k)
+against the HF model through disk offload, 32 tokens: **top-1 agreement 100%**,
+NLL 3.508 vs 3.503, max |Δlogit| 0.72 on scale 30.9, peak RSS 11.4 GB (the
+reference load; engine alone ~4 GB). 863 MB/token at top-8 — 4× OLMoE's, from
+128 experts × 48 layers. The Qwen3 replication of E1/E2 runs on it.

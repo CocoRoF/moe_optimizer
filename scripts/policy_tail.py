@@ -21,7 +21,7 @@ tok = AutoTokenizer.from_pretrained(MODEL, cache_dir=".cache")
 corpora = {
  "wikitext": "\n\n".join(t for t in load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1", split="test")["text"] if t.strip()),
  "gsm8k":    "\n\n".join(r["question"] + " " + r["answer"] for r in load_dataset("openai/gsm8k", "main", split="test").select(range(400))),
- "code":     "\n\n".join(r["content"] for r in load_dataset("bigcode/the-stack-smol", data_dir="data/python", split="train").select(range(60))),
+ "code":     "\n\n".join(r["prompt"] + r["canonical_solution"] for r in load_dataset("openai/openai_humaneval", split="test")),   # ungated
 }
 rm = resolve_model(MODEL, cache_dir=".cache", allow_download=False); store = ExpertStore(rm)
 pols = [TopKPolicy(K)]
