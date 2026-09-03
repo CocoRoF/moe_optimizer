@@ -126,7 +126,11 @@ uv venv .venv && VIRTUAL_ENV=.venv uv pip install --python .venv/bin/python -e .
 ```
 
 CPU-only by design: every algorithm streams one expert table at a time and the
-whole pipeline runs in well under 28 GB with no GPU. Phases that genuinely need
+whole pipeline runs in well under 28 GB with no GPU. Measured anonymous RSS of
+the streaming engines during a sweep: OLMoE 3.7–4.5 GB, Qwen3-30B-A3B 3.8 GB
+(a further 6–7 GB of mmap'd shard pages shows in RSS but is reclaimable file
+cache). `MB/tok` counts fp32 bytes moved through the engine, i.e. 2× the bf16
+bytes on disk; ratios between policies are unaffected. Phases that genuinely need
 a GPU (task benchmarks, latency, HBM) are deliberately not implemented here.
 
 ## Use
