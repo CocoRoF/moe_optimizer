@@ -31,5 +31,7 @@ echo "== 6. oracle (F24)  ~1 h / ~2 h =="
 $PY scripts/policy_oracle.py $OLMOE 4096 5; $PY scripts/policy_oracle.py $QWEN 4096 5
 
 echo "== 7. counterfactual: Qwen3 without top-k renormalisation (F25)  ~1.5 h =="
-$PY scripts/policy_sweep.py $QWEN 4096 5 --no-renorm && $PY scripts/paired_bootstrap.py runs/policy_sweep_qwen3_norenorm.json
+$PY scripts/policy_sweep.py $QWEN 4096 5 --no-renorm   && $PY scripts/paired_bootstrap.py runs/policy_sweep_qwen3_norenorm.json
+echo "== 7b. clean counterfactual: renormalise to the full top-k mass (F25b)  ~1.5 h =="
+$PY scripts/policy_sweep.py $QWEN 4096 5 --renorm-full && $PY scripts/paired_bootstrap.py runs/policy_sweep_qwen3_renormfull.json
 echo "done. Compare runs/*.json against results/."
