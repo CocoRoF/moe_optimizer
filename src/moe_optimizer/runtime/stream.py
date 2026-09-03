@@ -316,3 +316,35 @@ class StreamingQwen3MoE(StreamingOLMoE):
                 self.record_output_norms[l][e, 1] += y.shape[0]
             out.index_add_(0, slot_tok, y * we.unsqueeze(1))
         return h + out
+
+
+@torch.no_grad()
+def decode_benchmark(engine: StreamingOLMoE, ids: torch.Tensor, prefill: int = 32,
+                     steps: int = 64) -> dict:
+    """Batch-1 decode: one token per forward with the KV cache.
+
+    This is the regime the mechanism targets and the one ``perplexity`` does not
+    measure: in prefill an expert read once serves every token in the sequence
+    that routes to it, so bytes/token is amortised; in decode every token's
+    experts are read fresh.  Reports per-token bytes, expert loads and wall time
+    over ``steps`` teacher-forced tokens after a ``prefill``-token prompt, plus a
+    consistency check that the cached path reproduces the uncached logits.
+    """
+    ids = ids[: prefill + steps]
+    cache: dict = {}
+    lg_p, _ = engine.forward(ids[:prefill], cache)
+    lg_full, _ = engine.forward(ids[: prefill + 1])          # uncached reference for token `prefill`
+    lg_c, _ = engine.forward(ids[prefill: prefill + 1], cache)
+    consistency = float((lg_c[-1] - lg_full[-1]).abs().max())
+    cache = {}; engine.forward(ids[:prefill], cache)
+    tot_bytes = tot_loads = 0; ks = []; t0 = time.perf_counter(); nll = 0.0
+    for i in range(prefill, prefill + steps):
+        lg, st = engine.forward(ids[i: i + 1], cache)
+        tot_bytes += st.bytes_read; tot_loads += st.expert_loads; ks += st.per_layer_k
+        if i + 1 < ids.numel():
+            nll += F.cross_entropy(lg[-1:], ids[i + 1: i + 2]).item()
+    sec = time.perf_counter() - t0
+    return {"policy": engine.policy.name, "steps": steps, "tok_per_s": steps / sec,
+            "MB_per_tok": tot_bytes / steps / 1e6, "expert_loads_per_tok": tot_loads / steps,
+            "mean_k": sum(ks) / len(ks), "decode_ppl": math.exp(nll / max(steps - 1, 1)),
+            "cache_consistency_max_dlogit": consistency}
