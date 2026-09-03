@@ -205,6 +205,14 @@ experts into arbitrary contiguous blocks. Any gain attributed to functional
 clustering must be measured against it; if a method does no better, its
 clustering step is decoration.
 
+**Sequence long jobs in one shell; never guard on `pgrep -f`.** Three chained
+runs in this project deadlocked because a waiter tested `pgrep -f "<pattern>"`
+from inside a script whose own command line contained the pattern — once via
+the guard line, once via a relaunch line, once via `pkill`. The bracket trick
+(`[p]attern`) protects only the line it is on. The working pattern is a single
+background shell that runs each step in the foreground, sequentially, with the
+only gate being free memory (`free -g` ≥ threshold) between steps.
+
 **Training-free, defined explicitly.**
 
 | tier | permitted | status |
