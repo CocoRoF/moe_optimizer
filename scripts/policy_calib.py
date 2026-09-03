@@ -6,7 +6,13 @@ from transformers import AutoTokenizer
 from moe_optimizer.io.checkpoint import ExpertStore, resolve_model
 from moe_optimizer.runtime.stream import StreamingOLMoE, ExpertPolicy
 from moe_optimizer.runtime.calibrate import mass_ratio_medians, scale_dispersion
-MODEL, N = "allenai/OLMoE-1B-7B-0924", int(sys.argv[1]) if len(sys.argv) > 1 else 2048
+MODEL = next((a for a in sys.argv[1:] if "/" in a), "allenai/OLMoE-1B-7B-0924")
+ARGS = [a for a in sys.argv[1:] if "/" not in a]
+SHORT = MODEL.split("/")[-1].split("-")[0].lower()          # olmoe | qwen3
+def _engine_cls(cfg):
+    from moe_optimizer.runtime.stream import StreamingOLMoE, StreamingQwen3MoE
+    return StreamingQwen3MoE if cfg.get("model_type", "").startswith("qwen") else StreamingOLMoE
+N = int(ARGS[0]) if ARGS else 2048
 
 class Trace(ExpertPolicy):
     def __init__(self, k): self.k, self.w, self.i, self.name = k, {}, {}, "trace"
@@ -20,7 +26,7 @@ text = "\n\n".join(t for t in load_dataset("Salesforce/wikitext", "wikitext-2-ra
 ids = tok(text, return_tensors="pt").input_ids[0][:N]; ids = ids[: ids.numel() // 512 * 512].view(-1, 512)
 rm = resolve_model(MODEL, cache_dir=".cache", allow_download=False)
 pol = Trace(rm.config["num_experts_per_tok"])
-eng = StreamingOLMoE(ExpertStore(rm), rm.config, policy=pol); eng.record_output_norms = {}
+eng = _engine_cls(rm.config)(ExpertStore(rm), rm.config, policy=pol); eng.record_output_norms = {}
 t0 = time.time()
 for j in range(ids.shape[0]):
     eng.forward(ids[j]); print(f"  seq {j+1}/{ids.shape[0]}  {time.time()-t0:.0f}s", flush=True)
@@ -30,7 +36,7 @@ for l in scale:                                       # experts never routed: fi
     m = scale[l] > 0; scale[l][~m] = scale[l][m].mean()
 K = pol.k
 torch.save({"model": MODEL, "n_tokens": ids.numel(), "k": K, "traces": traces, "indices": indices,
-            "scale": scale, "beta_median": mass_ratio_medians(traces, K)}, "runs/policy_calib_olmoe.pt")
+            "scale": scale, "beta_median": mass_ratio_medians(traces, K)}, f"runs/policy_calib_{SHORT}.pt")
 cv = scale_dispersion(scale)
 allw = torch.cat(list(traces.values()))
 # norm_topk_prob=False on OLMoE: raw softmax probs over all 64 experts. Headroom is a
