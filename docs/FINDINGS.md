@@ -182,7 +182,7 @@ This work: OLMoE-1B-7B, batch-1, training-free — 38 % fewer expert loads (k′
 | score_only@5.0 | 4.85 | 4007 | 232.6 | 0.39 | 1.36× |
 | contribution@5.0 | 4.90 | 4030 | 235.0 | 0.42 | 1.49× |
 
-Bytes/token are linear in k′ here too (48 layers × k′ × 3 × 768×2048 fp32 ≈ 19 MB per expert per token). Cache path exact (0.000). Perplexity in this table is a 47-token sanity check, not a quality result — see §7 for Qwen3 quality.
+Bytes/token are linear in k′ here too (48 layers × k′ × 3 × 768×2048 fp32 ≈ 19 MB per expert per token). Cache-consistency (max |Δlogit| cached vs uncached) is 0.000 for every skipping row and **0.106 for the top-8 row** — 0.3 % of the logit scale (30.9), consistent with fp32 summation-order differences between the batched prefill and single-token paths accumulating over 48 layers; it is reported rather than hidden, and it does not affect the bytes or speed columns. Perplexity in this table is a 47-token sanity check, not a quality result — see §7 for Qwen3 quality.
 
 ## Pending
 
