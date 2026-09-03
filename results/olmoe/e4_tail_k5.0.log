@@ -1,0 +1,14 @@
+  wikitext  top8                 ppl=   9.587  k'=8.00
+  wikitext  score_only@5.0       ppl=  10.393  k'=4.88
+  wikitext  contribution@5.0     ppl=  10.109  k'=4.89
+  gsm8k     top8                 ppl=   5.638  k'=8.00
+  gsm8k     score_only@5.0       ppl=   5.997  k'=5.00
+  gsm8k     contribution@5.0     ppl=   5.936  k'=5.02
+  code      top8                 ppl=   3.046  k'=8.00
+  code      score_only@5.0       ppl=   3.254  k'=4.94
+  code      contribution@5.0     ppl=   3.227  k'=5.02
+
+relative degradation vs top-8 (worst domain / wikitext):
+  score_only@5.0       wikitext: +8.4%  gsm8k: +6.4%  code: +6.9%   tail/mean ratio 1.00
+  contribution@5.0     wikitext: +5.4%  gsm8k: +5.3%  code: +6.0%   tail/mean ratio 1.10
+DONE

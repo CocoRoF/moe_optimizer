@@ -1,0 +1,9 @@
+  top8                   ppl=  11.051  k'=8.00    25.8 MB/tok  25.07 tok/s
+  mass_ratio(median)     ppl=  45.213  k'=3.20    24.7 MB/tok  26.92 tok/s
+  top5(static)           ppl=  12.299  k'=5.00    24.9 MB/tok  27.74 tok/s
+  score_only@k'=5.0      ppl=  12.579  k'=4.94    24.8 MB/tok  31.16 tok/s
+  contribution@k'=5.0    ppl=  12.202  k'=4.96    24.3 MB/tok  52.57 tok/s
+  top4(static)           ppl=  14.117  k'=4.00    24.4 MB/tok  50.74 tok/s
+  score_only@k'=4.0      ppl=  14.737  k'=3.94    24.3 MB/tok  44.72 tok/s
+  contribution@k'=4.0    ppl=  13.701  k'=3.96    23.6 MB/tok  50.38 tok/s
+DONE

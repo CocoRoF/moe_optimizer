@@ -1,0 +1,112 @@
+[
+ {
+  "policy": "top8",
+  "steps": 64,
+  "tok_per_s": 1.8629056603840712,
+  "MB_per_tok": 2147.745792,
+  "expert_loads_per_tok": 128.0,
+  "mean_k": 8.0,
+  "decode_ppl": 7.431581915344164,
+  "cache_consistency_max_dlogit": 9.059906005859375e-06
+ },
+ {
+  "policy": "mass_ratio(median)",
+  "steps": 64,
+  "tok_per_s": 4.165838856150068,
+  "MB_per_tok": 1073.676288,
+  "expert_loads_per_tok": 42.640625,
+  "mean_k": 2.6650390625,
+  "decode_ppl": 39.26399710997955,
+  "cache_consistency_max_dlogit": 1.71661376953125e-05
+ },
+ {
+  "policy": "top6(static)",
+  "steps": 64,
+  "tok_per_s": 2.8178819946674167,
+  "MB_per_tok": 1745.092608,
+  "expert_loads_per_tok": 96.0,
+  "mean_k": 6.0,
+  "decode_ppl": 7.747322659206751,
+  "cache_consistency_max_dlogit": 1.0013580322265625e-05
+ },
+ {
+  "policy": "score_only@6.0",
+  "steps": 64,
+  "tok_per_s": 2.8954084800327733,
+  "MB_per_tok": 1723.662336,
+  "expert_loads_per_tok": 94.296875,
+  "mean_k": 5.8935546875,
+  "decode_ppl": 7.867905708302499,
+  "cache_consistency_max_dlogit": 1.049041748046875e-05
+ },
+ {
+  "policy": "contribution@6.0",
+  "steps": 64,
+  "tok_per_s": 2.8087614236988903,
+  "MB_per_tok": 1725.825024,
+  "expert_loads_per_tok": 94.46875,
+  "mean_k": 5.904296875,
+  "decode_ppl": 7.95661819515938,
+  "cache_consistency_max_dlogit": 8.58306884765625e-06
+ },
+ {
+  "policy": "top5(static)",
+  "steps": 64,
+  "tok_per_s": 3.3241200839699405,
+  "MB_per_tok": 1543.766016,
+  "expert_loads_per_tok": 80.0,
+  "mean_k": 5.0,
+  "decode_ppl": 8.170602315050976,
+  "cache_consistency_max_dlogit": 1.049041748046875e-05
+ },
+ {
+  "policy": "score_only@5.0",
+  "steps": 64,
+  "tok_per_s": 3.234663191549281,
+  "MB_per_tok": 1516.437504,
+  "expert_loads_per_tok": 77.828125,
+  "mean_k": 4.8642578125,
+  "decode_ppl": 8.482666191189498,
+  "cache_consistency_max_dlogit": 1.049041748046875e-05
+ },
+ {
+  "policy": "contribution@5.0",
+  "steps": 64,
+  "tok_per_s": 3.348608250238898,
+  "MB_per_tok": 1520.959488,
+  "expert_loads_per_tok": 78.1875,
+  "mean_k": 4.88671875,
+  "decode_ppl": 8.425547025502102,
+  "cache_consistency_max_dlogit": 8.58306884765625e-06
+ },
+ {
+  "policy": "top4(static)",
+  "steps": 64,
+  "tok_per_s": 2.575476567488278,
+  "MB_per_tok": 1342.439424,
+  "expert_loads_per_tok": 64.0,
+  "mean_k": 4.0,
+  "decode_ppl": 8.844595128160558,
+  "cache_consistency_max_dlogit": 1.049041748046875e-05
+ },
+ {
+  "policy": "score_only@4.0",
+  "steps": 64,
+  "tok_per_s": 2.9025936140808732,
+  "MB_per_tok": 1311.571968,
+  "expert_loads_per_tok": 61.546875,
+  "mean_k": 3.8466796875,
+  "decode_ppl": 9.589380546445117,
+  "cache_consistency_max_dlogit": 1.0013580322265625e-05
+ },
+ {
+  "policy": "contribution@4.0",
+  "steps": 64,
+  "tok_per_s": 3.0194746573599436,
+  "MB_per_tok": 1316.093952,
+  "expert_loads_per_tok": 61.90625,
+  "mean_k": 3.869140625,
+  "decode_ppl": 9.813053880172058,
+  "cache_consistency_max_dlogit": 1.049041748046875e-05
+ }
+]

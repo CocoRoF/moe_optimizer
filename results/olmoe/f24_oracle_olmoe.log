@@ -1,0 +1,10 @@
+  top8                       ppl=  10.333  k'=8.00
+  score_only@5.0             ppl=  11.643  k'=4.94
+  contribution@5.0           ppl=  11.338  k'=4.97
+  oracle(tau=0.500)          ppl=  16.390  k'=2.69
+  oracle(tau=0.250)          ppl=  11.353  k'=4.63
+  oracle(tau=0.125)          ppl=  10.517  k'=6.11
+  oracle@4.63 vs score_only@5.0:  -2.5% [ -4.2,  -0.8] SIGNIFICANT
+  oracle@4.63 vs contribution@5.0:  +0.1% [ -1.1,  +1.4] n.s.
+  contribution@5.0 vs score_only@5.0:  -2.6% [ -4.1,  -1.1] SIGNIFICANT
+DONE

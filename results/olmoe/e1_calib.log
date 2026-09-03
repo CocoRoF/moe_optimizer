@@ -1,0 +1,18 @@
+  seq 1/4  43s
+  seq 2/4  65s
+  seq 3/4  84s
+  seq 4/4  105s
+
+=== E1 done: 2,048 tokens, top-8 ===
+G1 -- CV of calibrated output scale s[l,e] within layer (kill line 0.15):
+  L00:0.30 L01:0.39 L02:0.32 L03:0.23 L04:0.19 L05:0.17 L06:0.20 L07:0.18 L08:0.20 L09:0.21 L10:0.20 L11:0.31 L12:0.27 L13:0.28 L14:0.33 L15:0.32
+  mean CV 0.255   min 0.171   max 0.386
+
+headroom -- sorted top-k weight medians:  w1=0.079 w2=0.064 w3=0.054 w4=0.046 w5=0.040 w6=0.034 w7=0.030 w8=0.027
+  tokens reaching 90% gate mass by k': 1:   0% 2:   0% 3:   0% 4:   0% 5:   0% 6:   0% 7:   0% 8:   0%
+  tokens reaching 95% gate mass by k': 1:   0% 2:   0% 3:   0% 4:   0% 5:   0% 6:   0% 7:   0% 8:   0%
+  tokens reaching 99% gate mass by k': 1:   0% 2:   0% 3:   0% 4:   0% 5:   0% 6:   0% 7:   0% 8:   0%
+
+scale vs gate weight -- correlation of s[e] with mean w_e per layer (is scale redundant with score?):
+  L00:+0.19 L01:+0.39 L02:+0.39 L03:+0.50 L04:+0.20 L05:-0.06 L06:+0.29 L07:+0.05 L08:+0.24 L09:+0.11 L10:+0.14 L11:+0.23 L12:-0.05 L13:+0.05 L14:-0.03 L15:+0.11   mean +0.171
+DONE

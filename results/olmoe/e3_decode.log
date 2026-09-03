@@ -1,0 +1,12 @@
+  top8                   k'=8.00  2147.7 MB/tok  128.0 loads/tok  1.86 tok/s  decode-ppl=7.43  cache-check=0.000
+  mass_ratio(median)     k'=2.67  1073.7 MB/tok   42.6 loads/tok  4.17 tok/s  decode-ppl=39.26  cache-check=0.000
+  top6(static)           k'=6.00  1745.1 MB/tok   96.0 loads/tok  2.82 tok/s  decode-ppl=7.75  cache-check=0.000
+  score_only@6.0         k'=5.89  1723.7 MB/tok   94.3 loads/tok  2.90 tok/s  decode-ppl=7.87  cache-check=0.000
+  contribution@6.0       k'=5.90  1725.8 MB/tok   94.5 loads/tok  2.81 tok/s  decode-ppl=7.96  cache-check=0.000
+  top5(static)           k'=5.00  1543.8 MB/tok   80.0 loads/tok  3.32 tok/s  decode-ppl=8.17  cache-check=0.000
+  score_only@5.0         k'=4.86  1516.4 MB/tok   77.8 loads/tok  3.23 tok/s  decode-ppl=8.48  cache-check=0.000
+  contribution@5.0       k'=4.89  1521.0 MB/tok   78.2 loads/tok  3.35 tok/s  decode-ppl=8.43  cache-check=0.000
+  top4(static)           k'=4.00  1342.4 MB/tok   64.0 loads/tok  2.58 tok/s  decode-ppl=8.84  cache-check=0.000
+  score_only@4.0         k'=3.85  1311.6 MB/tok   61.5 loads/tok  2.90 tok/s  decode-ppl=9.59  cache-check=0.000
+  contribution@4.0       k'=3.87  1316.1 MB/tok   61.9 loads/tok  3.02 tok/s  decode-ppl=9.81  cache-check=0.000
+DONE

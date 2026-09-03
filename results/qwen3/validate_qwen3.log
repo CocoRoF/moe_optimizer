@@ -1,0 +1,5 @@
+stream: 32 tok in 32.7s, k'=8.00, 863.2 MB/tok
+Some parameters are on the meta device because they were offloaded to the cpu and disk.
+top-1 agreement 100.0%   max|dlogit| 0.720   mean|dlogit| 0.0659   logit scale 30.9   (bf16 quantisation of ref alone: 0.000)
+nll stream 3.5084   nll ref 3.5029   -> PASS
+peak RSS 11406564 KB
