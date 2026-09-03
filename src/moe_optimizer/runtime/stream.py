@@ -252,3 +252,67 @@ class StreamingOLMoE:
         tot.seconds = time.perf_counter() - t0
         tot.experts_per_token = sum(tot.per_layer_k) / max(len(tot.per_layer_k), 1)
         return math.exp(nll / cnt), tot
+
+
+class StreamingQwen3MoE(StreamingOLMoE):
+    """Qwen3-MoE variant.  Differences from OLMoE, each verified against the HF
+    source: grouped-query attention (32 q heads / 4 kv heads, head_dim 128);
+    q_norm / k_norm are RMSNorms over *head_dim*, applied per head after the
+    reshape; rope theta from config (1e6); ``norm_topk_prob=True`` so the kept
+    top-k probabilities are renormalised to sum to one; experts are
+    ``moe_intermediate_size`` wide.  Tensor names are identical in form.
+    """
+
+    def __init__(self, store, config, policy=None, dtype=torch.float32, threads: int = 11):
+        super().__init__(store, config, policy, dtype, threads)
+        self.hd = config.get("head_dim") or self.d // self.H
+        self.KV = config["num_key_value_heads"]; self.groups = self.H // self.KV
+        self.expert_bytes = 3 * config["moe_intermediate_size"] * self.d * 2
+
+    def _layer(self, l, h, cos, sin, cache, stats):
+        p = f"model.layers.{l}."
+        x = self._rms(h, self._g(p + "input_layernorm.weight"))
+        T = x.shape[0]
+        q = (x @ self._g(p + "self_attn.q_proj.weight").T).view(T, self.H, self.hd)
+        kk = (x @ self._g(p + "self_attn.k_proj.weight").T).view(T, self.KV, self.hd)
+        v = (x @ self._g(p + "self_attn.v_proj.weight").T).view(T, self.KV, self.hd)
+        q = self._rms(q, self._g(p + "self_attn.q_norm.weight")).transpose(0, 1)      # per-head norm
+        kk = self._rms(kk, self._g(p + "self_attn.k_norm.weight")).transpose(0, 1)
+        v = v.transpose(0, 1)
+        c, s = cos.unsqueeze(0), sin.unsqueeze(0)
+        q = q * c + self._rot(q) * s; kk = kk * c + self._rot(kk) * s
+        if cache is not None:
+            if l in cache:
+                kk = torch.cat([cache[l][0], kk], 1); v = torch.cat([cache[l][1], v], 1)
+            cache[l] = (kk, v)
+        kk = kk.repeat_interleave(self.groups, 0); v = v.repeat_interleave(self.groups, 0)
+        S = kk.shape[1]
+        att = (q @ kk.transpose(1, 2)) * (self.hd ** -0.5)
+        mask = torch.full((T, S), float("-inf")).triu(S - T + 1)
+        att = F.softmax((att + mask).float(), -1).to(self.dtype) @ v
+        att = att.transpose(0, 1).reshape(T, self.H * self.hd) @ self._g(p + "self_attn.o_proj.weight").T
+        stats.bytes_read += (2 * self.H * self.hd * self.d + 2 * self.KV * self.hd * self.d) * 2
+        h = h + att
+
+        x = self._rms(h, self._g(p + "post_attention_layernorm.weight"))
+        probs = F.softmax((x @ self._g(p + "mlp.gate.weight").T).float(), -1)
+        idx, w = self.policy.select(probs, l)
+        # norm_topk_prob=True: renormalise over the experts actually kept
+        w = (w / w.sum(-1, keepdim=True).clamp_min(1e-12)).to(self.dtype)
+        out = torch.zeros_like(x)
+        used = idx[w > 0].unique()
+        stats.expert_loads += used.numel(); stats.bytes_read += used.numel() * self.expert_bytes
+        stats.per_layer_k.append(float((w > 0).sum(1).float().mean()))
+        for e in used.tolist():
+            slot_tok, slot_pos = torch.where(idx == e)
+            we = w[slot_tok, slot_pos]; m = we > 0; slot_tok, we = slot_tok[m], we[m]
+            xe = x[slot_tok]
+            g = xe @ self.store.expert(Slot(l, "gate"), e).to(self.dtype).T
+            u = xe @ self.store.expert(Slot(l, "up"), e).to(self.dtype).T
+            y = (F.silu(g) * u) @ self.store.expert(Slot(l, "down"), e).to(self.dtype).T
+            if self.record_output_norms is not None:
+                self.record_output_norms.setdefault(l, torch.zeros(self.E, 2, dtype=torch.float64))
+                self.record_output_norms[l][e, 0] += y.norm(dim=-1).double().sum()
+                self.record_output_norms[l][e, 1] += y.shape[0]
+            out.index_add_(0, slot_tok, y * we.unsqueeze(1))
+        return h + out

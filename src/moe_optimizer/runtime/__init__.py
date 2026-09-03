@@ -1,1 +1,2 @@
-from .stream import StreamingOLMoE, ExpertPolicy, TopKPolicy, MassRatioPolicy, ContributionPolicy
+from .stream import (StreamingOLMoE, StreamingQwen3MoE, ExpertPolicy, TopKPolicy,
+                     MassRatioPolicy, ContributionPolicy)
