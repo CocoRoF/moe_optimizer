@@ -1,7 +1,7 @@
 """E4: worst-domain check.  Same policies, three corpora, report the ratio of
 per-domain perplexity degradation to the WikiText degradation (MoEXBench's
 warning: the mean hides the tail).  Runs only for policies E2 has justified."""
-import sys, json, torch
+import sys, json, gc, torch
 sys.path.insert(0, "src")
 from datasets import load_dataset
 from transformers import AutoTokenizer
@@ -25,7 +25,7 @@ res = {}
 for name, text in corpora.items():
     ids = tok(text, return_tensors="pt").input_ids[0][:N]
     for pol in pols:
-        ppl, st = StreamingOLMoE(store, rm.config, policy=pol).perplexity(ids, verbose=False)
+        eng = StreamingOLMoE(store, rm.config, policy=pol); ppl, st = eng.perplexity(ids, verbose=False); del eng; gc.collect()
         res.setdefault(pol.name, {})[name] = {"ppl": ppl, "k": st.experts_per_token}
         print(f"  {name:<9} {pol.name:<20} ppl={ppl:8.3f}  k'={st.experts_per_token:.2f}", flush=True)
 base = res[pols[0].name]

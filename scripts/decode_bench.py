@@ -1,5 +1,5 @@
 """E3 (correct form): batch-1 decode bandwidth and speed per policy."""
-import sys, json, torch
+import sys, json, gc, torch
 sys.path.insert(0, "src")
 from datasets import load_dataset
 from transformers import AutoTokenizer
@@ -21,7 +21,8 @@ for t in TARGETS:
     c = ContributionPolicy(K, sc, calibrate_taus(tr, sc, ix, t)); c.name = f"contribution@{t}"; pols.append(c)
 rows = []
 for pol in pols:
-    r = decode_benchmark(StreamingOLMoE(store, rm.config, policy=pol), ids, prefill=32, steps=STEPS); rows.append(r)
+    eng = StreamingOLMoE(store, rm.config, policy=pol)
+    r = decode_benchmark(eng, ids, prefill=32, steps=STEPS); rows.append(r); del eng; gc.collect()
     print(f"  {r['policy']:<22} k'={r['mean_k']:.2f}  {r['MB_per_tok']:6.1f} MB/tok  {r['expert_loads_per_tok']:5.1f} loads/tok  "
           f"{r['tok_per_s']:.2f} tok/s  decode-ppl={r['decode_ppl']:.2f}  cache-check={r['cache_consistency_max_dlogit']:.3f}", flush=True)
 json.dump(rows, open("runs/decode_bench_olmoe.json", "w"), indent=1); print("DONE")
