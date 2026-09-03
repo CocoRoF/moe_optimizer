@@ -4,7 +4,7 @@
 
 Every routed expert that is *not* executed is three weight matrices not read from memory. Training-free skipping rules to date decide which experts to drop from the router score alone. We measure that the score carries almost no information about how much an expert contributes (r = +0.17 on OLMoE-1B-7B, −0.05 on Qwen3-30B-A3B), and that ranking by `score × calibrated output scale` — 64 floats per layer from one calibration pass — fixes this on an unnormalised router and does not on a renormalised one.
 
-📄 **Results with hyperparameters:** [`docs/FINDINGS.md`](docs/FINDINGS.md) · 🧪 **Raw outputs:** [`results/`](results/) · 🔁 **Reproduce:** `scripts/reproduce.sh` · 🖥 **Environment:** [`results/ENV.md`](results/ENV.md) · 📓 **Lab log (incl. the compression-era negatives):** [`docs/LOG.md`](docs/LOG.md) · 📊 **Slides:** [`docs/slides/`](docs/slides/)
+📄 **Results with hyperparameters:** [`docs/FINDINGS.md`](docs/FINDINGS.md) · 🧪 **Raw outputs:** [`results/`](results/) · 🔁 **Reproduce:** `scripts/reproduce.sh` · 🖥 **Environment:** [`results/ENV.md`](results/ENV.md) · 📓 **Lab log (incl. the compression-era negatives):** [`docs/LOG.md`](docs/LOG.md) · 📚 **Literature survey (24 papers, verified):** [`docs/SURVEY.md`](docs/SURVEY.md) · ✍️ **Paper outline:** [`docs/PAPER_OUTLINE.md`](docs/PAPER_OUTLINE.md) · 📊 **Slides:** [`docs/slides/`](docs/slides/)
 
 ## Headline table — OLMoE-1B-7B, 8,192 test tokens, matched mean k′
 
@@ -24,7 +24,7 @@ Paired bootstrap, 16 sequences: contribution vs score-only **−3.0 % [−4.0, �
 
 ```bash
 uv venv .venv && VIRTUAL_ENV=.venv uv pip install --python .venv/bin/python -r requirements-lock.txt -e .
-.venv/bin/python -m pytest tests/ -q          # 33 tests
+.venv/bin/python -m pytest tests/ -q          # 36 tests
 scripts/reproduce.sh                          # everything, in order; ~8 h CPU total, one job at a time
 ```
 
@@ -58,7 +58,7 @@ scripts/                 validate_stream, policy_calib, policy_sweep, decode_ben
                          paired_bootstrap, reproduce.sh
 results/                 raw JSON/log outputs, calibration artefacts, ENV.md
 docs/                    FINDINGS.md (results), LOG.md (chronological), slides/, figures/
-tests/                   33 tests: policy exactness, engine round-trips, bootstrap, undefined-name check
+tests/                   36 tests: policy exactness, engine round-trips, bootstrap, undefined-name check
 ```
 
 ## Design rules
