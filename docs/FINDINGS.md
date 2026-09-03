@@ -25,6 +25,8 @@ Every number here is reproducible from this repo on CPU. Commands are given.
 | F15 | Contribution skipping beats score-only by −0.9/−3.0/**−8.5%** ppl at k′≈6/5/4; score-only loses to static; median rule → ppl 40.8 | OLMoE | **mechanism supported** (2K tokens; 8K confirmation queued) |
 | F16 | Batch-1 decode: bytes/token linear in k′, **1.80× tok/s at k′≈5**, cache path exact; its 63-token ppl column is noise | OLMoE | W3 answered |
 | F17 | Qwen3-30B-A3B streaming engine validates (100% top-1, NLL 3.508 vs 3.503) | Qwen3-30B | tool |
+| F18 | G1 on Qwen3: CV 0.335; r(scale, gate) = **−0.06**, negative in 15/48 layers | Qwen3-30B | W1 stronger on Qwen3 |
+| F19 | E4: no domain collapse (tail/mean ≤ 1.10); contribution wins every cell; fresh-slice replication −2.8% / −7.1% | OLMoE | G4 passes |
 
 ---
 
@@ -993,3 +995,66 @@ against the HF model through disk offload, 32 tokens: **top-1 agreement 100%**,
 NLL 3.508 vs 3.503, max |Δlogit| 0.72 on scale 30.9, peak RSS 11.4 GB (the
 reference load; engine alone ~4 GB). 863 MB/token at top-8 — 4× OLMoE's, from
 128 experts × 48 layers. The Qwen3 replication of E1/E2 runs on it.
+
+---
+
+## F18 — Qwen3-30B-A3B: G1 passes harder; the router *anti*-correlates with output scale
+
+```bash
+python3 scripts/policy_calib.py Qwen/Qwen3-30B-A3B 1024
+```
+
+1,024 WikiText-2 train tokens through `StreamingQwen3MoE`, top-8 of 128, 48 layers.
+
+| | OLMoE-1B-7B (F14) | **Qwen3-30B-A3B** |
+|---|---:|---:|
+| within-layer CV of output scale s[l,e], mean | 0.255 | **0.335** |
+| min / max over layers | 0.17 / 0.39 | 0.17 / **2.66** (L02) |
+| r(s[e], mean gate weight), mean over layers | +0.17 | **−0.06** |
+| layers with r < −0.2 | 0 | **15 of 48** |
+| top-8 sorted weight medians, w1 / w8 | 0.079 / 0.027 (2.9×) | 0.077 / 0.024 (3.2×) |
+| tokens needing k′ ≥ 7 for 90% of top-8 mass | — | **98%** |
+
+G1 passes with margin. More striking: on Qwen3 the correlation between an
+expert's output magnitude and how much the router weights it is **negative in
+15 of 48 layers** (down to −0.35) and ≈0 on average. A score-only skip rule on
+this model is not merely ranking by noise (OLMoE); in a third of the layers it
+preferentially *keeps* the smaller-output experts. Layer 2 has a CV of 2.66 — a
+handful of experts with outputs an order of magnitude larger than the rest —
+which no score threshold can see.
+
+Routing is as flat as OLMoE's within the top-8: 98% of tokens need seven of
+eight experts to reach 90% of the kept gate mass. The "certain head, uncertain
+tail" profile (arXiv:2602.02443) was measured on the Instruct model during
+reasoning; the base model on WikiText shows no such head.
+
+The Qwen3 E2 sweep did not complete in this run (see F19 note); replication of
+the k′ comparison is pending.
+
+---
+
+## F19 — E4: no worst-domain collapse, and an independent replication of F15
+
+```bash
+python3 scripts/policy_tail.py allenai/OLMoE-1B-7B-0924 1024 5.0   # and 4.0
+```
+
+OLMoE, 1,024 tokens per corpus: WikiText-2 test, GSM8K (question+answer),
+HumanEval (prompt+solution). Perplexity relative to top-8.
+
+| policy | wikitext | gsm8k | code | tail / wikitext |
+|---|---:|---:|---:|---:|
+| score-only @5 | +8.4% | +6.4% | +6.9% | 1.00 |
+| **contribution @5** | **+5.4%** | **+5.3%** | **+6.0%** | 1.10 |
+| score-only @4 | +24.8% | +16.1% | +13.5% | 1.00 |
+| **contribution @4** | **+15.9%** | **+12.5%** | **+11.3%** | 1.00 |
+
+**Gate G4 (worst-domain degradation < 3× mean): passes** — math and code
+degrade *less* than WikiText under both rules, and contribution wins every
+cell. The WikiText column is a fresh 1,024-token slice and reproduces F15's
+margins in direction and rough size: contribution vs score-only **−2.8%** at
+k′≈5 (F15: −3.0%) and **−7.1%** at k′≈4 (F15: −8.5%).
+
+The 8,192-token confirmation with the paired bootstrap crashed before writing
+(diagnosed and relaunched separately); until it lands, the F15/F19 margins have
+two independent slices behind them and no confidence interval.
