@@ -16,5 +16,6 @@ def ci(a, b):
 print(f"paired bootstrap over {len(next(iter(rows.values())))} sequences, B={B}")
 for t in ("6.0", "5.0", "4.0"):
     c, q, s = rows.get(f"contribution@k'={t}"), rows.get(f"score_only@k'={t}"), rows.get(f"top{int(float(t))}(static)")
-    if c and q: lo, md, hi = ci(c, q); print(f"  k'~{t}: contribution vs score-only  {md*100:+5.1f}%  [{lo*100:+5.1f}, {hi*100:+5.1f}]  {'SIGNIFICANT' if hi < 0 else 'n.s.'}")
-    if c and s: lo, md, hi = ci(c, s); print(f"  k'~{t}: contribution vs static      {md*100:+5.1f}%  [{lo*100:+5.1f}, {hi*100:+5.1f}]  {'SIGNIFICANT' if hi < 0 else 'n.s.'}")
+    def lab(lo, hi): return "SIGNIFICANT (better)" if hi < 0 else "SIGNIFICANT (worse)" if lo > 0 else "n.s."
+    if c and q: lo, md, hi = ci(c, q); print(f"  k'~{t}: contribution vs score-only  {md*100:+5.1f}%  [{lo*100:+5.1f}, {hi*100:+5.1f}]  {lab(lo, hi)}")
+    if c and s: lo, md, hi = ci(c, s); print(f"  k'~{t}: contribution vs static      {md*100:+5.1f}%  [{lo*100:+5.1f}, {hi*100:+5.1f}]  {lab(lo, hi)}")

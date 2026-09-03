@@ -18,7 +18,7 @@ Every routed expert that is *not* executed is three weight matrices not read fro
 
 Paired bootstrap, 16 sequences: contribution vs score-only **−3.0 % [−4.0, −2.0]** (k′≈5), **−7.0 % [−8.8, −5.3]** (k′≈4); vs static **−2.9 % [−4.9, −1.1]** at k′≈4. Batch-1 decode at k′≈5: **1.80×** tok/s, bytes/token linear in k′. Math and code degrade *less* than general text.
 
-**Qwen3-30B-A3B (renormalised router):** contribution ties score-only (+0.4 % [−1.7, +2.3]) and the oracle is *worse* than score-only (+5.1 %) — the contribution signal is not the right one there; static top-k dominates. See FINDINGS §6–7.
+**Qwen3-30B-A3B:** contribution ties score-only (+0.4 % [−1.7, +2.3]), the oracle is *worse* than score-only (+5.1 %), and neutralising the router's renormalisation changes nothing (F25b) — the contribution signal is not the right one there and static top-k dominates. See FINDINGS §6–7, §12.
 
 ## Install and run
 

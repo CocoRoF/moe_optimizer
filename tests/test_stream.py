@@ -52,7 +52,7 @@ def test_paired_bootstrap_flags_a_real_difference_and_not_noise():
             {"policy": "score_only@k'=6.0", "per_seq_nll": base}]
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f: json.dump(rows, f)
     out = subprocess.run([sys.executable, "scripts/paired_bootstrap.py", f.name], capture_output=True, text=True).stdout
-    assert "k'~4.0: contribution vs score-only" in out and "SIGNIFICANT" in out.split("k'~4.0: contribution vs score-only")[1].split("\n")[0]
+    assert "k'~4.0: contribution vs score-only" in out and "SIGNIFICANT (better)" in out.split("k'~4.0: contribution vs score-only")[1].split("\n")[0]
     assert "n.s." in out.split("k'~6.0: contribution vs score-only")[1].split("\n")[0]
 
 

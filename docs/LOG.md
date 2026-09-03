@@ -1270,3 +1270,7 @@ Counterfactual `StreamingQwen3MoE(renorm=False)`, 4,096 tokens, k′=5. The unmo
 ## F26 — Qwen3 batch-1 decode (2026-09-03)
 
 57 GB of shards vs ~10 GB page cache: every layer read is an NVMe read (~700 MB/s, 28 % iowait). top-8 5436 MB/tok at 0.28 tok/s; contribution@5 4030 MB/tok at 0.42 tok/s. Bytes linear in k′. Cache-consistency 0.000 on all skipping rows, 0.106 on the top-8 row (0.3 % of logit scale). The curated results document (`docs/FINDINGS.md`) is now the live record; this log is frozen after this entry except for F25b.
+
+## F25b — Qwen3 with full-mass renormalisation (2026-09-03)
+
+`renorm="full"`: top-8 bit-identical (11.879); dropping = subtraction. contribution vs score-only +0.8 % [−0.9, +2.7]; vs static +3.1 % [+1.2, +5.1]. The renormalisation hypothesis is rejected; F25's −40 % was an artefact of the damaged model. Log closed.

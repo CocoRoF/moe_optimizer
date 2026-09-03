@@ -2,7 +2,7 @@
 
 All numbers below are reproducible on CPU from this repository: `scripts/reproduce.sh` runs every step in order; raw outputs ship in `results/`; the environment, model revisions, data selection and seeds are in `results/ENV.md`. The chronological lab log (F1–F24, including the compression-era negative results this project began with) is `docs/LOG.md`.
 
-**One-sentence result.** On a MoE whose router does *not* renormalise the kept top-k weights (OLMoE-1B-7B), ranking experts by `gate weight × calibrated output scale` instead of gate weight alone improves matched-budget perplexity by 3.0 % [2.0, 4.0] at k′≈5 and 7.0 % [5.3, 8.8] at k′≈4, matches an oracle that knows every expert's true output, and yields a 1.80× batch-1 decode speedup; on a router that *does* renormalise (Qwen3-30B-A3B) no norm-based rule — proxy, error model, or oracle — beats the score, and static top-k dominates.
+**One-sentence result.** On a MoE whose router does *not* renormalise the kept top-k weights (OLMoE-1B-7B), ranking experts by `gate weight × calibrated output scale` instead of gate weight alone improves matched-budget perplexity by 3.0 % [2.0, 4.0] at k′≈5 and 7.0 % [5.3, 8.8] at k′≈4, matches an oracle that knows every expert's true output, and yields a 1.80× batch-1 decode speedup; on Qwen3-30B-A3B no norm-based rule — proxy, error model, oracle, or the same rules with renormalisation neutralised — beats the score, and static top-k dominates; that boundary is measured, not yet explained.
 
 ---
 
@@ -129,7 +129,7 @@ Gate G4 (worst-domain < 3× mean): passes. Contribution wins every cell.
 
 contribution vs score_only: +0.4 % [−1.7, +2.3] (tie). With 1,024 calibration tokens (F21) it had been a +5.3 % loss — calibration starvation (≈64 tokens per expert), fixed by 4×. Budget hogging by outlier experts: rejected (per-layer k′ flat at 4.9–5.2). Renormalisation-aware error model: worse.
 
-**Interpretation.** Qwen3 renormalises the kept weights; dropping expert e also rescales every survivor by W_all/W_P, so the change in the layer output depends on the *directions* of kept and dropped outputs, which are only approximately orthogonal (whitened NN cosine median 0.40). No norm-only ranking sees that. On OLMoE removal is subtraction and the norm suffices. The counterfactual — Qwen3 with renormalisation switched off (F25) — is the measurement of this claim and is pending.
+**Interpretation (revised after F25b).** The natural suspect was renormalisation: Qwen3 rescales the kept weights, so dropping an expert also amplifies the survivors and a norm-only ranking cannot see the direction interactions. §12 tests this directly and **rejects it** — with removal made pure subtraction the tie and the static advantage persist. The null is real and, for now, unexplained at the mechanism level; §12 lists what was ruled out.
 
 ---
 
@@ -154,7 +154,7 @@ This work: OLMoE-1B-7B, batch-1, training-free — 38 % fewer expert loads (k′
 | gate | condition | outcome |
 |---|---|---|
 | G1 | within-layer CV of s < 0.15 → abandon | OLMoE 0.255, Qwen3 0.341 — **pass** |
-| G2 | contribution not better than score-only at matched k′ | OLMoE **pass** (CI excludes 0); Qwen3 **fail** (tie) |
+| G2 | contribution not better than score-only at matched k′ | OLMoE **pass** (CI excludes 0); Qwen3 **fail** (tie, also under full-mass renormalisation) |
 | G3 | bytes/token reduction does not become tok/s | **pass** (1.80×) |
 | G4 | worst-domain > 3× mean degradation | **pass** (≤ 1.10) |
 | E4 rule | run tail only if contribution wins ≥ 2 of 3 budgets | 3/3 |
@@ -164,7 +164,7 @@ This work: OLMoE-1B-7B, batch-1, training-free — 38 % fewer expert loads (k′
 ## 10. Limitations
 
 1. **Absolute cost.** +10 % perplexity for 38 % fewer expert loads. ZEDA reaches ~50 % with training at minimal loss; this closes none of that gap.
-2. **One positive model.** The mechanism works on an unnormalised router and is a null on a renormalised one; generality is a claim about router type, supported by one model each and one pending counterfactual.
+2. **One positive model, one unexplained null.** The mechanism works on OLMoE and is a tie on Qwen3; the router-renormalisation explanation was tested (F25, F25b) and rejected, so the boundary of applicability is empirical, not mechanistic.
 3. **Perplexity only.** No downstream accuracy without a GPU.
 4. **Regime.** Batch-1 fp32 CPU decode. GPU batched serving converts bytes to latency sublinearly.
 5. **The two principled variants lost.** The orthogonality-derived error model and the renormalisation-aware rule are both worse than the linear heuristic on both models (F22, F23).
@@ -184,29 +184,35 @@ This work: OLMoE-1B-7B, batch-1, training-free — 38 % fewer expert loads (k′
 
 Bytes/token are linear in k′ here too (48 layers × k′ × 3 × 768×2048 fp32 ≈ 19 MB per expert per token). Cache-consistency (max |Δlogit| cached vs uncached) is 0.000 for every skipping row and **0.106 for the top-8 row** — 0.3 % of the logit scale (30.9), consistent with fp32 summation-order differences between the batched prefill and single-token paths accumulating over 48 layers; it is reported rather than hidden, and it does not affect the bytes or speed columns. Perplexity in this table is a 47-token sanity check, not a quality result — see §7 for Qwen3 quality.
 
-## 12. Counterfactual: Qwen3 without top-k renormalisation (F25) — directionally right, confounded
+## 12. Is renormalisation the reason? Two counterfactuals (F25, F25b) — no
 
-```bash
-python3 scripts/policy_sweep.py Qwen/Qwen3-30B-A3B 4096 5 --no-renorm
-```
+**F25** (`renorm=False`, raw top-8 probabilities): the unmodified model's top-8 perplexity becomes 42.9 (raw probs sum to ≈0.35; every MoE output is scaled by ~⅓). Inside that model contribution beats score-only by −40 % [−73, −5] and static by −34 % [−63, −1]. Direction as hypothesised — but the model is 4× off its operating point and the intervals span 70 points.
 
-`StreamingQwen3MoE(renorm=False)`: kept weights are the raw top-8 softmax probabilities, as on OLMoE.
+**F25b** (`renorm="full"`, kept weights divided by the *original* top-8 mass): the unmodified model is bit-identical to Qwen3 (top-8 = 11.879), and dropping an expert subtracts its term without rescaling the survivors — removal is subtraction, exactly as on OLMoE.
 
-| policy | k′ | ppl |
-|---|---:|---:|
-| top-8 (this counterfactual model) | 8.00 | **42.892** (vs 11.879 with renormalisation) |
-| static top-5 | 5.00 | 154.4 |
-| score-only @5 | 5.09 | 173.4 |
-| **contribution @5** | 5.04 | **100.2** |
-| contribution_sq @5 | 5.02 | 117.5 |
-| mass-ratio (median) | 4.21 | 1651 |
+| policy (4,096 tokens, k′=5) | k′ | ppl | Δ vs 11.879 |
+|---|---:|---:|---:|
+| static top-5 | 5.00 | **12.730** | +7.2 % |
+| score-only @5 | 4.94 | 13.014 | +9.6 % |
+| contribution @5 | 4.97 | 13.120 | +10.4 % |
+| contribution_sq @5 | 4.94 | 13.161 | +10.8 % |
+| mass-ratio (median) | 3.29 | 22.353 | +88 % |
 
-Paired bootstrap (8 sequences): contribution vs score-only **−40.3 % [−72.8, −4.7]**; vs static **−34.0 % [−62.6, −0.8]**.
+Paired bootstrap (8 sequences): contribution vs score-only **+0.8 % [−0.9, +2.7]** (tie); contribution vs static **+3.1 % [+1.2, +5.1]** (static significantly better).
 
-**Reading, carefully.** The direction is what §7 predicts — once expert removal is pure subtraction, contribution ranking wins on Qwen3 too, and by a wide margin. But this counterfactual is confounded: Qwen3 was trained with renormalised weights, and the raw top-8 probabilities sum to ≈0.35, so switching renormalisation off scales every MoE output by ~⅓ and quadruples the *unmodified* model's perplexity. Differences measured inside a model that far from its operating point may reflect instability rather than the ranking signal; the 70-point intervals say as much. **This is supporting, not conclusive.**
+**The renormalisation hypothesis is rejected.** With removal made pure subtraction, the contribution signal still adds nothing on Qwen3 and static top-k still wins. F25's −40 % was an artefact of the damaged model, as its intervals warned. Two side observations: under full-mass renormalisation the published median rule degrades far less (22.4 vs 184.0), and static top-5 costs about the same as before (+7.2 % vs +6.4 %) — dropping experts on Qwen3 is gentle *because* the router's score already orders them well for this model, leaving little for any dynamic rule to improve.
 
-The clean counterfactual is F25b: renormalise to the **full** top-8 mass W_all instead of the kept mass W_P. The unmodified model is then bit-identical to the real Qwen3 (top-8 = 11.879), and dropping an expert is subtraction of its term with no rescaling of the survivors. Queued.
+### Where that leaves the Qwen3 null
+
+| hypothesis for F21/F22 | test | outcome |
+|---|---|---|
+| calibration starvation (64 tokens / expert) | 4× calibration tokens (F22) | **confirmed** as the cause of F21's *loss*; leaves a tie |
+| outlier experts hog the budget | per-layer k′ (F22) | rejected (flat 4.9–5.2) |
+| mean-scale proxy too coarse | per-token oracle (F24) | rejected — the oracle is *worse* than score |
+| top-k renormalisation | F25 (off), F25b (full-mass) | **rejected** — tie and static win persist with removal = subtraction |
+
+What remains is a model-level fact without a mechanism: on Qwen3-30B-A3B the router score is a better skip criterion than any output-norm quantity, mean or per-token, even though it is uncorrelated with output magnitude. A plausible reading — untested — is that expert *redundancy* matters more than magnitude there: dropping a large-norm expert whose direction is covered by kept ones costs little, and score may track that coverage. Testing it needs a direction-aware criterion, which is future work.
 
 ## Pending
 
-F25b — Qwen3 with `renorm="full"` (clean counterfactual for §7 / §12).
+Nothing running. Open question: a direction-aware skip criterion for routers where score beats output norm (Qwen3-class).

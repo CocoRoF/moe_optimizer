@@ -161,18 +161,18 @@ table(s, [["policy (k′=5, 4,096 token)", "Δ ppl vs top-8 11.879"], ["정적 t
 bullets(s, ["contribution vs score-only: +0.4 % [−1.7, +2.3] — 동률 (1,024-token 캘리브레이션에서는 +5.3 % 손실 → 4배로 해소: calibration starvation)",
             "budget hogging 기각(층별 k′ 4.9–5.2 평탄) · renorm 오차모델 오히려 악화 · oracle도 실패",
             "해석: norm_topk_prob=True → expert 하나를 빼면 생존자 전부가 W_all/W_P로 재조정. 출력 변화는 방향에 의존하고, expert 출력은 근사 직교일 뿐(whitened NN cos 0.40)",
-            "OLMoE(renorm 없음)에서는 제거 = 뺄셈 → norm이 충분한 proxy", "반사실 F25 (renorm off): contribution −40 % [−73, −5] vs score-only — 방향은 예측대로, 단 그 모델 자체가 ppl 42.9(4×)로 손상 → 지지 증거이지 확증 아님", "깨끗한 반사실 F25b (full-mass renorm; top-8 동일, 제거 = 뺄셈) 실행 중"], left=6.8, top=1.3, width=6.2, height=5.5, size=12)
+            "OLMoE(renorm 없음)에서는 제거 = 뺄셈 → norm이 충분한 proxy", "반사실 F25 (renorm off): −40 % — 그러나 모델이 ppl 42.9(4×)로 손상된 상태의 아티팩트", "**F25b (full-mass renorm; top-8 동일 11.879, 제거 = 뺄셈): +0.8 % [−0.9, +2.7] 동률, static이 여전히 우세 → renorm 가설 기각**", "가설 4개 중 3개 측정으로 기각, 1개(calibration 부족)는 F21 손실의 원인으로 확인 — null은 실재하고 기제는 미해명"], left=6.8, top=1.3, width=6.2, height=5.5, size=12)
 # ---- 기여·한계·향후
 section("연구의 기여점 및 향후 연구 방향")
 s = title_only("기여")
 bullets(s, ["측정: router score는 expert 출력 크기를 담지 않는다 — 두 fine-grained MoE에서 r ≈ 0, Qwen3는 층의 1/3에서 음", "방법: 층당 E floats의 calibrated scale로 정렬 — 학습 없음, router 보존",
             "결과(OLMoE): score-only 대비 −3.0 % / −7.0 % (CI 0 제외), 정적 top-k 대비 k′≈4에서 −2.9 %, oracle과 동률, tail 저하 ≤ 평균, 디코드 1.80×",
-            "경계: renormalised router(Qwen3)에서는 어떤 norm 기반 규칙도 실패 — 분리 변수를 특정하고 반사실을 설계", "부정 결과 명시: 발표된 중앙값 규칙은 두 모델 모두 붕괴; 제가 유도한 원리적 변형 둘은 휴리스틱보다 열등",
+            "경계: Qwen3에서는 어떤 norm 기반 규칙도(proxy·oracle·renorm 중립화) score를 못 이김 — 경계는 측정됨, 기제는 미해명 (가설 3개 기각)", "부정 결과 명시: 발표된 중앙값 규칙은 두 모델 모두 붕괴; 제가 유도한 원리적 변형 둘은 휴리스틱보다 열등",
             "재현: CPU 전용, 모델 revision·데이터·seed·환경 고정, results/에 원자료, reproduce.sh 한 줄"], size=15)
 s = title_only("한계와 향후 연구")
 bullets(s, ["절대 비용: 로드 38 % 절감에 ppl +10 % — ZEDA(학습)의 50 % 거의 무손실과 격차 존재", "positive 모델 1개 + null 모델 1개; 일반성은 'router 유형' 주장이며 반사실(F25) 대기",
             "perplexity만 — GPU 없이는 다운스트림 정확도 불가", "batch-1 fp32 CPU 무대 — GPU 배치 서빙에서는 bytes→latency가 sublinear",
-            "향후: (1) F25/F26 — Qwen3 renorm-off 반사실, Qwen3 디코드 대역폭  (2) 방향을 보는 규칙 — renormalised router용 (3) instruct/추론 모델의 'certain head' 프로파일에서의 재측정  (4) GPU 다운스트림 평가"], size=15)
+            "향후: (1) 방향/중복을 보는 skip 기준 — Qwen3류에서 score가 norm을 이기는 이유의 후보  (2) instruct/추론 모델의 'certain head' 프로파일에서 재측정  (3) GPU 다운스트림 평가  (4) 세 번째 모델(DeepSeek-V2-Lite)로 경계 확인"], size=15)
 section("감사합니다")
 s = title_only("References")
 refs = ["Lu, X. et al. (2024). Not All Experts are Equal: Efficient Expert Pruning and Skipping for MoE LLMs. ACL 2024.", "Chitty-Venkata, K. T. et al. (2025). LExI: Layer-Adaptive Active Experts for Efficient MoE Inference. arXiv:2509.02753.",
