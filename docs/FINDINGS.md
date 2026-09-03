@@ -842,3 +842,40 @@ under the 30%-free rule), on 34 tokens:
 The residual gap is the reference's own bf16 arithmetic through 16 layers.
 From here, every policy is scored on this engine by (perplexity, mean k′,
 bytes/token, tok/s) — the bandwidth-bound decode regime the mechanism targets.
+
+---
+
+## F14 — E1: expert output scale varies within a layer and is nearly uncorrelated with gate weight (G1 passes)
+
+```bash
+python3 scripts/policy_calib.py 2048
+```
+
+OLMoE-1B-7B, 2,048 WikiText-2 train tokens through the streaming engine, top-8.
+`s[l,e]` = mean ‖E_e(x)‖ over tokens routed to e.
+
+**Gate G1 (pre-registered kill line: within-layer CV of s < 0.15).**
+
+| layer | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| CV of s | .30 | .39 | .32 | .23 | .19 | .17 | .20 | .18 | .20 | .21 | .20 | .31 | .27 | .28 | .33 | .32 |
+
+Mean **0.255**, min 0.171 — every layer clears the line. **Passes.**
+
+**Is scale redundant with score?** Pearson r between `s[e]` and expert e's mean
+gate weight, per layer: mean **+0.17**; layers 5, 7, 12, 13, 14 in [−0.06, +0.05].
+The router score carries almost no information about output magnitude — which
+is W1 in the survey, now measured rather than argued. A score-only skip rule
+(Lu et al. 2024; arXiv:2512.21911) therefore ranks experts by a quantity that is
+close to orthogonal to their actual contribution.
+
+**Routing shape.** Sorted top-8 raw-softmax medians: 0.079, 0.064, 0.054,
+0.046, 0.040, 0.034, 0.030, 0.027 — a head/tail ratio of only 2.9×. OLMoE's
+routing is far flatter than the "certain head, uncertain tail" profile reported
+for Qwen3 (arXiv:2602.02443). Flat scores mean score-only skipping has little
+signal to work with here; whether contribution ranking supplies what score
+lacks is exactly what E2 tests. (The E1 print's "% of tokens reaching 90% gate
+mass" rows normalised over all 64 experts and are meaningless for a model with
+`norm_topk_prob=False`; fixed in the script, not used by the sweep.)
+
+E2 was launched automatically by the G1 rule.

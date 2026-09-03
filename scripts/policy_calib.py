@@ -32,12 +32,15 @@ K = pol.k
 torch.save({"model": MODEL, "n_tokens": ids.numel(), "k": K, "traces": traces, "indices": indices,
             "scale": scale, "beta_median": mass_ratio_medians(traces, K)}, "runs/policy_calib_olmoe.pt")
 cv = scale_dispersion(scale)
-allw = torch.cat(list(traces.values())); cum = allw.cumsum(1)
+allw = torch.cat(list(traces.values()))
+# norm_topk_prob=False on OLMoE: raw softmax probs over all 64 experts. Headroom is a
+# statement about the kept set, so normalise within the top-k before cumulating.
+cum = (allw / allw.sum(1, keepdim=True)).cumsum(1)
 print(f"\n=== E1 done: {ids.numel():,} tokens, top-{K} ===")
 print("G1 -- CV of calibrated output scale s[l,e] within layer (kill line 0.15):")
 print("  " + " ".join(f"L{l:02d}:{cv[l]:.2f}" for l in sorted(cv)))
 print(f"  mean CV {sum(cv.values())/len(cv):.3f}   min {min(cv.values()):.3f}   max {max(cv.values()):.3f}")
-print("\nheadroom -- sorted top-k weight medians:  " + " ".join(f"w{j+1}={allw[:, j].median():.3f}" for j in range(K)))
+print(f"\nheadroom -- top-{K} sum of raw probs, median: {allw.sum(1).median():.3f}   sorted weight medians:  " + " ".join(f"w{j+1}={allw[:, j].median():.3f}" for j in range(K)))
 for tgt in (0.90, 0.95, 0.99):
     print(f"  tokens reaching {int(tgt*100)}% gate mass by k': " + " ".join(f"{j+1}:{(cum[:, j] >= tgt).float().mean()*100:4.0f}%" for j in range(K)))
 print("\nscale vs gate weight -- correlation of s[e] with mean w_e per layer (is scale redundant with score?):")
