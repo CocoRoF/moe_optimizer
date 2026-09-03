@@ -23,9 +23,7 @@ Paired bootstrap, 16 sequences: contribution vs score-only **−3.0 % [−4.0, �
 ## Install and run
 
 ```bash
-uv venv --python 3.12 .venv
-VIRTUAL_ENV=.venv uv pip install --python .venv/bin/python \
-    --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-lock.txt -e .   # torch==2.14.0+cpu lives on the CPU index
+scripts/setup_env.sh                          # .venv with the exact pinned versions (torch CPU wheel from PyTorch's index, rest from PyPI)
 .venv/bin/python -m pytest tests/ -q          # 36 tests
 scripts/reproduce.sh                          # everything, in order; ~8 h CPU total, one job at a time
 ```
