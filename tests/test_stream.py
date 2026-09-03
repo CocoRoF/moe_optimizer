@@ -1,0 +1,41 @@
+"""Policies must be exact on constructed inputs; the engine's shapes must hold."""
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
+import torch
+from moe_optimizer.runtime.stream import TopKPolicy, MassRatioPolicy, ContributionPolicy
+
+
+def test_topk_returns_raw_probs_unnormalised():
+    p = torch.tensor([[0.5, 0.3, 0.1, 0.1]])
+    i, w = TopKPolicy(2).select(p, 0)
+    assert i.tolist() == [[0, 1]] and torch.allclose(w, torch.tensor([[0.5, 0.3]]))
+
+
+def test_mass_ratio_skips_only_below_threshold():
+    p = torch.tensor([[0.6, 0.3, 0.05, 0.05],     # tail share of last 2 = 0.1 -> skip if beta1.. 
+                      [0.3, 0.3, 0.2, 0.2]])      # tail share of last 2 = 0.4 -> keep
+    pol = MassRatioPolicy(k=4, beta={0: [0.2, 0.2, 0.2]})   # skip m if share(last m) < 0.2
+    i, w = pol.select(p, 0)
+    assert (w[0] > 0).tolist() == [True, True, False, False]
+    assert (w[1] > 0).tolist() == [True, True, True, True]
+
+
+def test_contribution_uses_scale_not_gate_weight():
+    """A low-weight expert with a large calibrated output scale must be kept over
+    a high-weight expert with a tiny scale."""
+    p = torch.tensor([[0.4, 0.35, 0.15, 0.10]])
+    scale = {0: torch.tensor([0.1, 0.1, 10.0, 0.1])}       # expert 2 has huge outputs
+    pol = ContributionPolicy(k=4, scale=scale, tau={0: 0.5}, min_keep=1)
+    i, w = pol.select(p, 0)
+    kept = i[w > 0].tolist()
+    assert 2 in kept, (i, w)                                 # kept despite 3rd-lowest weight
+    assert len(kept) < 4                                     # and something was skipped
+
+
+def test_contribution_tau_zero_keeps_all_and_min_keep_holds():
+    p = torch.rand(5, 8); p = p / p.sum(1, keepdim=True)
+    scale = {0: torch.ones(8)}
+    _, w = ContributionPolicy(8, scale, {0: 0.0}).select(p, 0)
+    assert (w > 0).all()
+    _, w = ContributionPolicy(8, scale, {0: 0.999}, min_keep=2).select(p, 0)
+    assert ((w > 0).sum(1) >= 2).all()
