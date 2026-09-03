@@ -25,6 +25,7 @@ def section(text, sub=""):
     if sub and len(s.placeholders) > 1: s.placeholders[1].text = sub
     return s
 def bullets(s, items, left=0.6, top=1.35, width=12.1, height=5.6, size=16):
+    height = min(height, Emu(H).inches - top - 0.35)          # never extend below the canvas
     tb = s.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height)); tf = tb.text_frame; tf.word_wrap = True
     for i, it in enumerate(items):
         para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
