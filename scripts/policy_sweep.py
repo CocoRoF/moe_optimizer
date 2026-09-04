@@ -13,7 +13,8 @@ NO_RENORM = "--no-renorm" in sys.argv                 # F25 counterfactual (Qwen
 FULL_RENORM = "--renorm-full" in sys.argv             # F25b clean counterfactual (Qwen3 only)
 ARGS = [a for a in ARGS if a not in ("--no-renorm", "--renorm-full")]
 def _engine_cls(cfg):
-    from moe_optimizer.runtime.stream import StreamingOLMoE, StreamingQwen3MoE
+    from moe_optimizer.runtime.stream import StreamingOLMoE, StreamingQwen3MoE, StreamingQwen15MoE
+    if cfg.get("model_type", "") == "qwen2_moe": return StreamingQwen15MoE
     if cfg.get("model_type", "").startswith("qwen"):
         if NO_RENORM: return lambda *a, **k: StreamingQwen3MoE(*a, renorm=False, **k)
         if FULL_RENORM: return lambda *a, **k: StreamingQwen3MoE(*a, renorm="full", **k)

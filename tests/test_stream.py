@@ -166,8 +166,31 @@ def test_downstream_loglik_scores_continuation_tokens_only():
         def __call__(self, s, return_tensors=None):
             ids = torch.tensor([int(ch) for ch in s.replace(" ", "")]); return types.SimpleNamespace(input_ids=ids.unsqueeze(0))
     class Eng:
-        def forward(self, ids):
+        def forward(self, ids, cache=None):
             lg = torch.full((ids.numel(), 10), -5.0); lg[:, 7] = 5.0; return lg, None
     e, t = Eng(), Tok()
     assert pd.loglik(e, t, "12", "77") > pd.loglik(e, t, "12", "33")
     assert abs(pd.loglik(e, t, "12", "77") - pd.loglik(e, t, "99", "77")) < 1e-6   # context does not enter the score
+
+
+
+def test_cached_loglik_matches_uncached_on_a_real_engine_shape_stub():
+    """With a stub engine whose logits depend only on position count, the cached
+    path (context once, continuation incrementally) must equal the uncached one."""
+    import types, sys, importlib.util, pathlib
+    spec = importlib.util.spec_from_file_location("pd2", pathlib.Path(__file__).resolve().parents[1] / "scripts" / "policy_downstream.py")
+    pd = importlib.util.module_from_spec(spec); sys.argv = ["x"]; spec.loader.exec_module(pd)
+    class Tok:
+        def __call__(self, s, return_tensors=None):
+            return types.SimpleNamespace(input_ids=torch.tensor([[int(ch) for ch in s.replace(" ", "")]]))
+    class Eng:
+        def forward(self, ids, cache=None):
+            off = 0 if not cache or 0 not in cache else cache[0][0].shape[1]
+            T = ids.numel(); lg = torch.zeros(T, 10)
+            for t_ in range(T): lg[t_, (off + t_) % 10] = 3.0          # depends on absolute position only
+            if cache is not None:
+                kv = torch.zeros(1, T, 1); cache[0] = (torch.cat([cache[0][0], kv], 1), kv) if 0 in cache else (kv, kv)
+            return lg, None
+    e, t = Eng(), Tok(); ctx, cont = "123", "45"
+    c = t(ctx).input_ids[0]; cache = {}; lg_ctx, _ = e.forward(c, cache)
+    assert abs(pd.loglik(e, t, ctx, cont) - pd.loglik(e, t, ctx, cont, cache, lg_ctx[-1])) < 1e-6

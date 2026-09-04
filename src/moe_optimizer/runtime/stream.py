@@ -459,3 +459,71 @@ class LayerTopKPolicy(ExpertPolicy):
         w, i = probs.topk(self.k, dim=-1)
         keep = torch.zeros_like(w, dtype=torch.bool); keep[:, :max(kl, 1)] = True
         return i, w * keep
+
+
+class StreamingQwen15MoE(StreamingOLMoE):
+    """Qwen1.5-MoE-A2.7B (model_type qwen2_moe).  Verified against the HF source:
+    MHA 16/16 heads (head_dim 128), q/k/v projections **with bias**, no QK-norm,
+    RoPE theta from config (1e6), eps 1e-6; router softmax top-4 of 60 with
+    ``norm_topk_prob=False`` (raw probabilities, as on OLMoE); plus an
+    always-executed **shared expert** (SwiGLU, width 5632) scaled by
+    sigmoid(shared_expert_gate(x)).  Skipping policies act on the routed
+    experts only; the shared expert's bytes are counted every token.
+    """
+
+    def __init__(self, store, config, policy=None, dtype=torch.float32, threads: int = 11):
+        super().__init__(store, config, policy, dtype, threads)
+        self.hd = config.get("head_dim") or self.d // self.H
+        self.expert_bytes = 3 * config["moe_intermediate_size"] * self.d * 2
+        self.shared_bytes = 3 * config["shared_expert_intermediate_size"] * self.d * 2 + self.d * 2
+
+    def _layer(self, l, h, cos, sin, cache, stats):
+        p = f"model.layers.{l}."
+        x = self._rms(h, self._g(p + "input_layernorm.weight"))
+        T = x.shape[0]
+        q = x @ self._g(p + "self_attn.q_proj.weight").T + self._g(p + "self_attn.q_proj.bias")
+        kk = x @ self._g(p + "self_attn.k_proj.weight").T + self._g(p + "self_attn.k_proj.bias")
+        v = x @ self._g(p + "self_attn.v_proj.weight").T + self._g(p + "self_attn.v_proj.bias")
+        q = q.view(T, self.H, self.hd).transpose(0, 1); kk = kk.view(T, self.H, self.hd).transpose(0, 1)
+        v = v.view(T, self.H, self.hd).transpose(0, 1)
+        c, s_ = cos.unsqueeze(0), sin.unsqueeze(0)
+        q = q * c + self._rot(q) * s_; kk = kk * c + self._rot(kk) * s_
+        if cache is not None:
+            if l in cache:
+                kk = torch.cat([cache[l][0], kk], 1); v = torch.cat([cache[l][1], v], 1)
+            cache[l] = (kk, v)
+        S = kk.shape[1]
+        att = (q @ kk.transpose(1, 2)) * (self.hd ** -0.5)
+        mask = torch.full((T, S), float("-inf")).triu(S - T + 1)
+        att = F.softmax((att + mask).float(), -1).to(self.dtype) @ v
+        att = att.transpose(0, 1).reshape(T, self.d) @ self._g(p + "self_attn.o_proj.weight").T
+        stats.bytes_read += 4 * self.d * self.d * 2 + 3 * self.d * 2 + 2 * self.d * 2
+        h = h + att
+
+        x = self._rms(h, self._g(p + "post_attention_layernorm.weight"))
+        probs = F.softmax((x @ self._g(p + "mlp.gate.weight").T).float(), -1)
+        idx, w = self.policy.select(probs, l)
+        w = w.to(self.dtype)                                  # norm_topk_prob=False: raw probs
+        # shared expert: always on, sigmoid-gated
+        g_s = x @ self._g(p + "mlp.shared_expert.gate_proj.weight").T
+        u_s = x @ self._g(p + "mlp.shared_expert.up_proj.weight").T
+        y_s = (F.silu(g_s) * u_s) @ self._g(p + "mlp.shared_expert.down_proj.weight").T
+        y_s = torch.sigmoid(x @ self._g(p + "mlp.shared_expert_gate.weight").T) * y_s
+        stats.bytes_read += self.shared_bytes
+        out = y_s
+        used = idx[w > 0].unique()
+        stats.expert_loads += used.numel(); stats.bytes_read += used.numel() * self.expert_bytes
+        stats.per_layer_k.append(float((w > 0).sum(1).float().mean()))
+        for e in used.tolist():
+            slot_tok, slot_pos = torch.where(idx == e)
+            we = w[slot_tok, slot_pos]; m = we > 0; slot_tok, we = slot_tok[m], we[m]
+            xe = x[slot_tok]
+            g = xe @ self.store.expert(Slot(l, "gate"), e).to(self.dtype).T
+            u = xe @ self.store.expert(Slot(l, "up"), e).to(self.dtype).T
+            y = (F.silu(g) * u) @ self.store.expert(Slot(l, "down"), e).to(self.dtype).T
+            if self.record_output_norms is not None:
+                self.record_output_norms.setdefault(l, torch.zeros(self.E, 2, dtype=torch.float64))
+                self.record_output_norms[l][e, 0] += y.norm(dim=-1).double().sum()
+                self.record_output_norms[l][e, 1] += y.shape[0]
+            out = out.index_add(0, slot_tok, y * we.unsqueeze(1))
+        return h + out

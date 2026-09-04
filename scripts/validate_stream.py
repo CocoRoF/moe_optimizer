@@ -17,7 +17,9 @@ ids = tok("The Mixture-of-Experts architecture routes each token to a small subs
           "so the memory traffic per token depends on how many experts are actually loaded.",
           return_tensors="pt").input_ids[0][:48]
 rm = resolve_model(MODEL, cache_dir=".cache", allow_download=False)
-Engine = StreamingQwen3MoE if rm.config.get("model_type", "").startswith("qwen") else StreamingOLMoE
+from moe_optimizer.runtime.stream import StreamingQwen15MoE
+mt = rm.config.get("model_type", "")
+Engine = StreamingQwen15MoE if mt == "qwen2_moe" else StreamingQwen3MoE if mt.startswith("qwen") else StreamingOLMoE
 eng = Engine(ExpertStore(rm), rm.config, dtype=torch.float32)
 t0 = time.time(); lg_s, st = eng.forward(ids); print(f"stream: {ids.numel()} tok in {time.time()-t0:.1f}s, k'={st.experts_per_token:.2f}, {st.bytes_read/ids.numel()/1e6:.1f} MB/tok", flush=True)
 del eng

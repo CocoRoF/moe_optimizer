@@ -13,8 +13,10 @@ MODEL = next((a for a in sys.argv[1:] if "/" in a), "allenai/OLMoE-1B-7B-0924")
 ARGS = [a for a in sys.argv[1:] if "/" not in a]; SHORT = MODEL.split("/")[-1].split("-")[0].lower()
 N = int(ARGS[0]) if ARGS else 4096; TARGET = float(ARGS[1]) if len(ARGS) > 1 else 5.0
 def _engine_cls(cfg):
-    from moe_optimizer.runtime.stream import StreamingOLMoE, StreamingQwen3MoE
-    return StreamingQwen3MoE if cfg.get("model_type", "").startswith("qwen") else StreamingOLMoE
+    from moe_optimizer.runtime.stream import StreamingOLMoE, StreamingQwen3MoE, StreamingQwen15MoE
+    mt = cfg.get("model_type", "")
+    if mt == "qwen2_moe": return StreamingQwen15MoE
+    return StreamingQwen3MoE if mt.startswith("qwen") else StreamingOLMoE
 cal = torch.load(f"runs/policy_calib_{SHORT}.pt"); K, tr, ix, sc = cal["k"], cal["traces"], cal["indices"], cal["scale"]
 tok = AutoTokenizer.from_pretrained(MODEL, cache_dir=".cache")
 text = "\n\n".join(t for t in load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1", split="test")["text"] if t.strip())

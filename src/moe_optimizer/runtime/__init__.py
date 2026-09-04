@@ -1,2 +1,2 @@
-from .stream import (StreamingOLMoE, StreamingQwen3MoE, ExpertPolicy, TopKPolicy,
+from .stream import (StreamingOLMoE, StreamingQwen3MoE, StreamingQwen15MoE, ExpertPolicy, TopKPolicy,
                      MassRatioPolicy, ContributionPolicy, ContributionRenormPolicy, LayerTopKPolicy)

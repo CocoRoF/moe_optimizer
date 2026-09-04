@@ -14,8 +14,10 @@ ARGS = [a for a in sys.argv[1:] if "/" not in a]; SHORT = MODEL.split("/")[-1].s
 N_EX = int(ARGS[0]) if ARGS else 300; TARGET = float(ARGS[1]) if len(ARGS) > 1 else 5.0
 TASKS = ARGS[2].split(",") if len(ARGS) > 2 else ["hellaswag", "arc_easy", "piqa"]
 def _engine_cls(cfg):
-    from moe_optimizer.runtime.stream import StreamingOLMoE, StreamingQwen3MoE
-    return StreamingQwen3MoE if cfg.get("model_type", "").startswith("qwen") else StreamingOLMoE
+    from moe_optimizer.runtime.stream import StreamingOLMoE, StreamingQwen3MoE, StreamingQwen15MoE
+    mt = cfg.get("model_type", "")
+    if mt == "qwen2_moe": return StreamingQwen15MoE
+    return StreamingQwen3MoE if mt.startswith("qwen") else StreamingOLMoE
 
 def load_task(name, n):
     """-> list of (context, [choices], label)."""
@@ -30,17 +32,28 @@ def load_task(name, n):
         return [("Question: " + r["goal"] + "\nAnswer:", [" " + r["sol1"], " " + r["sol2"]], int(r["label"])) for r in ds]
     raise ValueError(name)
 
-def loglik(eng, tok, ctx, cont):
+def loglik(eng, tok, ctx, cont, cache=None, ctx_logit=None):
+    """Sum of log-probs of the continuation tokens given the context.  When a
+    KV cache of the context (and the context's last-position logits) is passed,
+    only the continuation is forwarded -- the context is shared across choices."""
     c = tok(ctx, return_tensors="pt").input_ids[0]; full = tok(ctx + cont, return_tensors="pt").input_ids[0]
     n_ctx = c.numel()
-    lg, _ = eng.forward(full)
-    lp = F.log_softmax(lg[n_ctx - 1:-1], -1)
+    if cache is None or not torch.equal(full[:n_ctx], c):
+        lg, _ = eng.forward(full)
+        lp = F.log_softmax(lg[n_ctx - 1:-1], -1)
+    else:
+        cc = {l: (k.clone(), v.clone()) for l, (k, v) in cache.items()}
+        lg_c, _ = eng.forward(full[n_ctx:], cc)
+        lg = torch.cat([ctx_logit.unsqueeze(0), lg_c[:-1]], 0) if full.numel() - n_ctx > 1 else ctx_logit.unsqueeze(0)
+        lp = F.log_softmax(lg, -1)
     return float(lp.gather(1, full[n_ctx:].unsqueeze(1)).sum())
 
 def accuracy(eng, tok, examples):
     correct = 0
     for ctx, choices, label in examples:
-        scores = [loglik(eng, tok, ctx, ch) for ch in choices]
+        c = tok(ctx, return_tensors="pt").input_ids[0]
+        cache = {}; lg_ctx, _ = eng.forward(c, cache)
+        scores = [loglik(eng, tok, ctx, ch, cache, lg_ctx[-1]) for ch in choices]
         correct += int(max(range(len(scores)), key=lambda j: scores[j]) == label)
     return correct / len(examples)
 
@@ -54,7 +67,8 @@ if __name__ == "__main__":
     bc = allocate_layer_budgets(tr, sc, ix, TARGET); cl = ContributionPolicy(K, sc, calibrate_taus_per_layer_target(tr, sc, ix, bc)); cl.name = f"contribution+layerbudget@{TARGET}"; pols.append(cl)
     res = {}
     for task in TASKS:
-        ex = load_task(task, N_EX)
+        try: ex = load_task(task, N_EX)
+        except Exception as exc: print(f"  {task}: skipped ({type(exc).__name__}: {str(exc)[:80]})", flush=True); continue
         for pol in pols:
             eng = Eng(store, rm.config, policy=pol); acc = accuracy(eng, tok, ex); del eng; gc.collect()
             res.setdefault(pol.name, {})[task] = acc
