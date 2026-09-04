@@ -166,6 +166,12 @@ s = title_only("결과 7 — 층별 예산 배분 (F27, OLMoE)")
 picture(s, "docs/figures/fig5_layer_budgets.png", 0.4, 1.25, width=8.4)
 bullets(s, ["calibration 곡선에서 층별 expert 수 k_l을 탐욕 배분 (학습 없음)", "static에는 크게 도움: layer_topk vs uniform static −2.8 % [−4.2, −1.6] (k′≈4)", "contribution 위에는 소폭: −0.1 % / −0.6 % (n.s.) — 곡선이 층 간 거의 동일해 옮길 예산이 적음",
             "조합이 최선: uniform static 대비 −0.9 % [−1.6, −0.1] (k′≈5), −3.5 % [−5.5, −1.6] (k′≈4)", "정렬 이득은 예산 통제 후에도 유지: score-only+budget 대비 −2.4 %, −4.2 %", "Qwen3 예산도 사전 계산 결과 거의 평탄(std 0.29): 출력 *스케일*의 이질성이 기여 *share* 곡선의 이질성으로 이어지지 않음 → Qwen3에서도 예산 배분은 소폭일 것으로 사전 등록"], left=8.9, top=1.4, width=4.3, height=5.3, size=11)
+s = title_only("결과 8 — 층별 예산 배분 (Qwen3) 와 신호 선택 (F27, F30)")
+bullets(s, ["Qwen3 예산 배분: layer_topk(static) vs uniform static −0.1 % [−2.3, +1.9] — 사전 등록대로 중립. static의 우위는 예산 문제가 아님",
+            "contribution+budget은 contribution보다 **+2.6 % [+1.4, +4.0] 악화** — w·s 곡선으로 예산을 배분했기 때문. Qwen3에서 scale은 무정보가 아니라 *틀린* 신호",
+            "→ 어느 신호를 믿을지는 모델 성질. calibration 토큰에서 층별로 두 규칙의 출력 오차를 직접 재서 선택 (F30)",
+            "OLMoE: 16/16 층이 contribution 선택 (예: L00 0.142 vs 0.150) — perplexity 없이 F20의 판정을 재현",
+            "Qwen3 사전 등록: ≥75 % 층이 score 선택 → MixedPolicy가 두 체제에서 각각 더 나은 규칙을 자동 상속", "sweep 수치: (실행 중)"], size=14)
 # ---- 기여·한계·향후
 section("연구의 기여점 및 향후 연구 방향")
 s = title_only("기여")

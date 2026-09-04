@@ -12,7 +12,11 @@
 2. *Skip by Contribution, Not by Score: Training-Free Dynamic Expert Selection in Fine-Grained MoE*
 3. (보수적) *Calibrated Output Scale as a Missing Signal in Training-Free MoE Expert Skipping*
 
-## 초록 초안 (영문) — F22 이후 재작성
+## 초록 초안 (영문) — F27/F30 이후 (논문의 새 척추: "어느 신호를 믿을지는 calibration이 고른다")
+
+> Training-free dynamic expert skipping decides which routed experts to execute from the router score alone. We show on three fine-grained MoE models that the score carries little information about an expert's output magnitude (r ≈ 0), and that ranking by score × a calibrated per-expert output scale is a large improvement on one router family and a degradation on another: on OLMoE-1B-7B it lowers matched-budget perplexity by 3.0 % [2.0, 4.0] and 7.0 % [5.3, 8.8] at k′≈5 and 4 and matches a per-token oracle, while on Qwen3-30B-A3B every use of the scale — for ranking, for layer budgets, or as an oracle — hurts. We resolve this with a calibration-only detector: on a few hundred tokens, each layer's output error under both drop rules is measured directly, and the lower-error signal is adopted per layer. The detector selects contribution in 16/16 OLMoE layers [Qwen3: pending] and the resulting mixed policy inherits the better rule on each model without knowing which model it is. A training-free layer-budget allocator is separable from the ranking signal and combines with it into the best configuration at both budgets on OLMoE (−0.9 % / −3.5 % vs static top-k, both significant). On a bandwidth-bound batch-1 decoder every skipped expert is bytes not read: 1.80× decode speed at k′≈5. [downstream accuracy: pending]
+
+## 초록 초안 (영문) — F22 이후 재작성 (기록용)
 
 > Training-free dynamic expert skipping decides which routed experts to execute from the router score alone. We measure on two fine-grained MoE models that the score carries little information about an expert's output magnitude (r = +0.17 on OLMoE-1B-7B, −0.05 on Qwen3-30B-A3B). Ranking on w_e·s_e with a calibrated per-expert output scale s_e — one calibration pass, no training — improves matched-budget perplexity over the score-only rule on OLMoE by 3.0% [2.0, 4.0] and 7.0% [5.3, 8.8] at k′≈5 and 4 (8,192-token paired bootstrap), surpasses static top-k at k′≈4, degrades math and code less than general text, and yields a 1.80× batch-1 decode speedup on a bandwidth-bound CPU decoder. **On Qwen3-30B-A3B, whose router renormalises the kept weights, the same signal is a statistical tie with score-only (+0.4% [−1.7, +2.3]), and static top-k dominates both.** Two principled variants — an orthogonality-derived error model and a renormalisation-aware stopping rule — are worse than the heuristic on both models. An oracle that keeps by the true per-token contribution ties the 64-float proxy on OLMoE (+0.1%, n.s.) and is worse than score-only on Qwen3 (+5.1% [1.7, 9.9]): the calibrated scale is, up to the oracle, a sufficient correction on unnormalised routers, while on renormalised routers the contribution signal itself is not the right one. The router's top-k renormalisation, the obvious suspect, is ruled out by a counterfactual that neutralises it at no cost to the unmodified model; the boundary of applicability is measured on two models and remains mechanistically open.
 
@@ -34,7 +38,8 @@
 | 5.4 Tail | wikitext/gsm8k/code, tail/mean | F19 |
 | 5.5 Generality | Qwen3 — **동률(null)**, oracle도 실패 → 신호 자체의 문제. renorm이 분리 변수. F25(renorm off): contribution −40 % — 방향 일치, 단 모델이 4× 손상되어 지지 증거에 그침. **F25b(full-mass renorm): 동률 유지, static 우세 → renorm 가설 기각.** 경계는 측정, 기제 미해명 | F21, F22, F24, F25, F25b |
 | 5.6 Ablation | contribution vs score-only vs static; linear vs squared share (F23); renorm 오차모델 (F22); **proxy vs oracle (F24: OLMoE 동률 — proxy 충분)** | F15, F22, F23, F24 |
-| 5.7 Layer budgets | 층별 예산 배분 (contribution+layerbudget vs LExI-style static vs uniform) — static이 이기는 Qwen3를 겨냥 | **F27(실행 중)** |
+| 5.7 Layer budgets | OLMoE: 예산+정렬 분리·결합, 최선 행 (−0.9 %/−3.5 % vs static, 유의). Qwen3: 예산 중립, scale 사용은 어디서든 악화 (+2.6 %) | F27 |
+| 5.7b Signal selection | calibration에서 층별 출력 오차로 신호 선택 → MixedPolicy. OLMoE 16/16 contribution; Qwen3 사전 등록 ≥75 % score | **F30(실행 중)** |
 | 5.8 Downstream | HellaSwag/ARC-Easy/PIQA loglikelihood 정확도, paired CI | **F28(대기)** |
 | 5.9 Third model | Qwen1.5-MoE-A2.7B (top-4/60, shared expert, unnormalised) | **F29(대기)** |
 | 6 Limitations | 절대 비용(+9.8% @ 37.5% 절감), ZEDA 대비, 모델 2→3개, CPU fp32 무대 | 아래 |
