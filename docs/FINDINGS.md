@@ -213,9 +213,40 @@ Paired bootstrap (8 sequences): contribution vs score-only **+0.8 % [−0.9, +2.
 
 What remains is a model-level fact without a mechanism: on Qwen3-30B-A3B the router score is a better skip criterion than any output-norm quantity, mean or per-token, even though it is uncorrelated with output magnitude. A plausible reading — untested — is that expert *redundancy* matters more than magnitude there: dropping a large-norm expert whose direction is covered by kept ones costs little, and score may track that coverage. Testing it needs a direction-aware criterion, which is future work.
 
+## 13. Layer-adaptive budgets (F27) — OLMoE half
+
+```bash
+python3 scripts/policy_sweep.py allenai/OLMoE-1B-7B-0924 8192 5,4   # runs the layer-budget policies too
+```
+
+`allocate_layer_budgets` picks a per-layer expert count k_l with mean k′ by greedily removing, across layers, the expert whose marginal share on the calibration curve is smallest (training-free, same calibration pass). Three uses: `layer_topk(static)` — a fixed k_l per layer, no per-token decision (the LExI-style baseline, here allocated from calibration gate-mass curves rather than weights); `score_only+layerbudget` and `contribution+layerbudget` — the dynamic rules with per-layer τ_l hitting k_l instead of a uniform k′. OLMoE, 8,192 tokens; the six original rows reproduce F20 exactly.
+
+| policy | k′≈5 ppl | Δ | k′≈4 ppl | Δ |
+|---|---:|---:|---:|---:|
+| static top-k (uniform) | 12.299 | +11.3 % | 14.117 | +27.7 % |
+| layer_topk (static, allocated) | 12.322 | +11.5 % | 13.714 | +24.1 % |
+| score-only (uniform) | 12.579 | +13.8 % | 14.737 | +33.4 % |
+| score-only + layer budget | 12.492 | +13.0 % | 14.219 | +28.7 % |
+| contribution (uniform) | 12.202 | +10.4 % | 13.701 | +24.0 % |
+| **contribution + layer budget** | **12.190** | **+10.3 %** | **13.611** | **+23.2 %** |
+
+Paired bootstrap (16 sequences):
+
+| comparison | k′≈5 | k′≈4 |
+|---|---|---|
+| layer_topk(static) vs uniform static | +0.2 % n.s. | **−2.8 % [−4.2, −1.6]** |
+| contribution+budget vs contribution | −0.1 % [−0.8, +0.5] n.s. | −0.6 % [−1.6, +0.2] n.s. |
+| contribution+budget vs layer_topk(static) | **−1.1 % [−2.1, −0.1]** | −0.7 % [−2.4, +0.7] n.s. |
+| contribution+budget vs uniform static | **−0.9 % [−1.6, −0.1]** | **−3.5 % [−5.5, −1.6]** |
+| contribution+budget vs score-only+budget | **−2.4 % [−3.3, −1.5]** | **−4.2 % [−5.8, −2.8]** |
+
+**Reading.** Budget allocation and ranking signal are separable and additive-ish. Allocation helps *static* selection a lot at tight budgets (−2.8 % at k′≈4: some layers tolerate 3 experts, others need 5) and adds little on top of contribution ranking (the dynamic rule already spends fewer experts on tokens/layers whose tail is cheap). The ranking gain is intact under budget control (−2.4 %, −4.2 % vs score-only at the same per-layer budgets). The combination is the best row at both budgets and beats uniform static top-k significantly at both — the first configuration that does so at k′≈5 (plain contribution was n.s. there, F20).
+
+The Qwen3 half is the one that matters for §7: static top-k wins there, and the question is whether it wins because it is static or because it happens to spend budget better than a uniform-k′ dynamic rule. Pending.
+
 ## Pending (running, in order)
 
-- **F27 — layer-adaptive budgets.** `allocate_layer_budgets` chooses per-layer expert counts under a mean-k′ budget from the calibration curves (training-free); tested as a static baseline (`layer_topk`, LExI-style), a score-only control, and `contribution+layerbudget`. OLMoE 8,192 tokens at k′ 5/4, then Qwen3 4,096 at k′ 5, with paired bootstraps. This targets the one place static top-k wins (Qwen3).
+- **F27 — layer-adaptive budgets, Qwen3 half** (OLMoE half in §13): does allocation explain static top-k's advantage on Qwen3?
 - **F28 — downstream accuracy.** HellaSwag / ARC-Easy / PIQA, 200 examples each, continuation log-likelihood on the streaming engine, OLMoE at k′=5, five policies, paired per-example CIs.
 - **F29 — third model.** Qwen1.5-MoE-A2.7B (top-4 of 60, `norm_topk_prob=False`, always-on shared expert): engine validation against HF, calibration, sweep at k′ 3 and 2.5.
 
