@@ -14,8 +14,10 @@ def ci(a, b):
         rs.append(math.exp(sum(a[i] for i in idx)/n) / math.exp(sum(b[i] for i in idx)/n) - 1)
     rs.sort(); return (rs[int(0.025*B)], rs[int(0.5*B)], rs[int(0.975*B)])
 print(f"paired bootstrap over {len(next(iter(rows.values())))} sequences, B={B}")
-for t in ("6.0", "5.0", "4.0"):
-    c, q, s = rows.get(f"contribution@k'={t}"), rows.get(f"score_only@k'={t}"), rows.get(f"top{int(float(t))}(static)")
+import re as _re
+targets = sorted({m.group(1) for k in rows for m in [_re.search(r"@k'=([0-9.]+)$", k)] if m}, key=float, reverse=True)
+for t in targets:
+    c, q, s = rows.get(f"contribution@k'={t}"), rows.get(f"score_only@k'={t}"), rows.get(f"top{int(round(float(t)))}(static)")
     cl, lt, ql = rows.get(f"contribution+layerbudget@k'={t}"), rows.get(f"layer_topk(static)@k'={t}"), rows.get(f"score_only+layerbudget@k'={t}")
     def lab(lo, hi): return "SIGNIFICANT (better)" if hi < 0 else "SIGNIFICANT (worse)" if lo > 0 else "n.s."
     for a, bb, name in ((cl, c, "contribution+layerbudget vs contribution"), (cl, lt, "contribution+layerbudget vs layer_topk(static)"),
