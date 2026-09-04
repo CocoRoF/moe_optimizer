@@ -242,6 +242,8 @@ Paired bootstrap (16 sequences):
 
 **Reading.** Budget allocation and ranking signal are separable and additive-ish. Allocation helps *static* selection a lot at tight budgets (−2.8 % at k′≈4: some layers tolerate 3 experts, others need 5) and adds little on top of contribution ranking (the dynamic rule already spends fewer experts on tokens/layers whose tail is cheap). The ranking gain is intact under budget control (−2.4 %, −4.2 % vs score-only at the same per-layer budgets). The combination is the best row at both budgets and beats uniform static top-k significantly at both — the first configuration that does so at k′≈5 (plain contribution was n.s. there, F20).
 
+**Why so little on OLMoE.** `docs/figures/fig5_layer_budgets.png`: the allocator moves only a handful of experts (layers 0–1 give up one at k′=5, layers 8–9 gain one; layer 0 drops to 3 at k′=4) because the per-layer marginal-share curves are nearly identical — the j-th ranked expert carries about the same share in every layer. There is little heterogeneity to exploit, so budgets barely move and the gain is small. A model with heterogeneous layers (Qwen3's layer 2 has an output-scale CV of 2.66, F18) should show the opposite.
+
 The Qwen3 half is the one that matters for §7: static top-k wins there, and the question is whether it wins because it is static or because it happens to spend budget better than a uniform-k′ dynamic rule. Pending.
 
 ## Pending (running, in order)

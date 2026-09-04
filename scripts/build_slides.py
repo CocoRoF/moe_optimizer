@@ -162,6 +162,10 @@ bullets(s, ["contribution vs score-only: +0.4 % [−1.7, +2.3] — 동률 (1,024
             "budget hogging 기각(층별 k′ 4.9–5.2 평탄) · renorm 오차모델 오히려 악화 · oracle도 실패",
             "해석: norm_topk_prob=True → expert 하나를 빼면 생존자 전부가 W_all/W_P로 재조정. 출력 변화는 방향에 의존하고, expert 출력은 근사 직교일 뿐(whitened NN cos 0.40)",
             "OLMoE(renorm 없음)에서는 제거 = 뺄셈 → norm이 충분한 proxy", "반사실 F25 (renorm off): −40 % — 그러나 모델이 ppl 42.9(4×)로 손상된 상태의 아티팩트", "**F25b (full-mass renorm; top-8 동일 11.879, 제거 = 뺄셈): +0.8 % [−0.9, +2.7] 동률, static이 여전히 우세 → renorm 가설 기각**", "가설 4개 중 3개 측정으로 기각, 1개(calibration 부족)는 F21 손실의 원인으로 확인 — null은 실재하고 기제는 미해명"], left=6.8, top=1.3, width=6.2, height=5.5, size=12)
+s = title_only("결과 7 — 층별 예산 배분 (F27, OLMoE)")
+picture(s, "docs/figures/fig5_layer_budgets.png", 0.4, 1.25, width=8.4)
+bullets(s, ["calibration 곡선에서 층별 expert 수 k_l을 탐욕 배분 (학습 없음)", "static에는 크게 도움: layer_topk vs uniform static −2.8 % [−4.2, −1.6] (k′≈4)", "contribution 위에는 소폭: −0.1 % / −0.6 % (n.s.) — 곡선이 층 간 거의 동일해 옮길 예산이 적음",
+            "조합이 최선: uniform static 대비 −0.9 % [−1.6, −0.1] (k′≈5), −3.5 % [−5.5, −1.6] (k′≈4)", "정렬 이득은 예산 통제 후에도 유지: score-only+budget 대비 −2.4 %, −4.2 %", "Qwen3에서는 층 이질성이 커서 예산 배분이 레버가 될 수 있음 — 실행 중"], left=8.9, top=1.4, width=4.3, height=5.3, size=11)
 # ---- 기여·한계·향후
 section("연구의 기여점 및 향후 연구 방향")
 s = title_only("기여")
