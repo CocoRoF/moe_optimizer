@@ -268,9 +268,24 @@ The pre-registered expectation held: budgets are nearly flat on Qwen3 and alloca
 
 **What the two halves say together.** Whether w·s is a better signal than w is a per-model property; on OLMoE using it helps everywhere it is applied, on Qwen3 it hurts everywhere it is applied. That is exactly the kind of property a calibration pass can *measure directly* — by dropping experts under each rule on calibration tokens and comparing layer-output error — and select per layer. That is F30.
 
+## 14. Per-layer signal selection (F30) — a calibration-only detector for which rule to trust
+
+```bash
+python3 scripts/signal_select.py allenai/OLMoE-1B-7B-0924 1024 8192 5,4
+python3 scripts/signal_select.py Qwen/Qwen3-30B-A3B 1024 4096 5
+```
+
+On 1,024 calibration tokens every routed expert is computed, and for each layer the relative layer-output error of dropping the m lowest experts is measured under both rankings (by w and by w·s). Each layer adopts the rule with lower error at m = 2. `MixedPolicy` then ranks by w·s in those layers and by w elsewhere, with per-layer τ for a target k′. No perplexity sweep is consulted.
+
+**OLMoE-1B-7B — selection.** All **16 / 16** layers choose contribution; the local error is lower under w·s in every layer (drop-2, relative): L00 0.142 vs 0.150, L02 0.162 vs 0.163, L04 0.206 vs 0.213, L06 0.206 vs 0.212, L08 0.221 vs 0.228. The detector reproduces F20's verdict from a local, cheap measurement.
+
+**Pre-registered expectation for Qwen3-30B-A3B (written before its pass ran):** a clear majority of layers (≥ 75 %) choose *score*, in line with F22/F24/F27 where every use of the scale hurt; the mixed policy then matches score-only there and contribution on OLMoE — one rule, both regimes. If instead Qwen3's layers mostly choose contribution while the sweep still favours score, the local error is not the right selection criterion and this section records a second null.
+
+Sweep results (mixed vs score-only / contribution / static, paired bootstrap): pending.
+
 ## Pending (running, in order)
 
 - **F28 — downstream accuracy.** HellaSwag / ARC-Easy / PIQA, 200 examples each, continuation log-likelihood on the streaming engine, OLMoE at k′=5, five policies, paired per-example CIs.
 - **F29 — third model.** Qwen1.5-MoE-A2.7B (top-4 of 60, `norm_topk_prob=False`, always-on shared expert): engine validation against HF, calibration, sweep at k′ 3 and 2.5.
 
-- **F30 — per-layer signal selection.** On calibration tokens, compute every routed expert, drop m experts by w and by w·s, measure layer-output error under each; select the better signal per layer. Predicts contribution on OLMoE and score on Qwen3 without knowing which model it is. Running first; E6/E7 re-queued behind it.
+- **F30 — sweep halves** (selection recorded in §14): OLMoE 8,192 tokens k′ 5/4, then Qwen3 4,096 tokens k′ 5.
