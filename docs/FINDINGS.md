@@ -244,12 +244,33 @@ Paired bootstrap (16 sequences):
 
 **Why so little on OLMoE.** `docs/figures/fig5_layer_budgets.png`: the allocator moves only a handful of experts (layers 0–1 give up one at k′=5, layers 8–9 gain one; layer 0 drops to 3 at k′=4) because the per-layer marginal-share curves are nearly identical — the j-th ranked expert carries about the same share in every layer. There is little heterogeneity to exploit, so budgets barely move and the gain is small. I expected Qwen3 to show the opposite (layer 2's output-scale CV is 2.66, F18). **Computed before its sweep from the shipped calibration** (`results/qwen3/layer_budgets_k5.json`, `fig5b`): it does not — budgets at k′=5 are 4–6 with std 0.29 (OLMoE 0.50); only layers 1, 3 (→4) and 23, 24 (→6) move. A large output-*scale* spread does not make a layer's contribution-*share* curve fatter, and the share curves are what the allocator reads. **Pre-registered expectation for the Qwen3 half:** layer budgets add little on Qwen3 too, so static top-k's advantage there is not explained by budget allocation.
 
-The Qwen3 half is the one that matters for §7: static top-k wins there, and the question is whether it wins because it is static or because it happens to spend budget better than a uniform-k′ dynamic rule. Pending.
+### Qwen3 half
+
+4,096 tokens, k′=5, calibration 4,096 tokens.
+
+| policy | k′ | ppl | Δ vs 11.879 |
+|---|---:|---:|---:|
+| static top-5 | 5.00 | 12.642 | +6.4 % |
+| **layer_topk (static, allocated)** | 5.00 | **12.620** | **+6.2 %** |
+| score-only | 5.00 | 12.945 | +9.0 % |
+| score-only + budget (gate curves) | 5.00 | 12.909 | +8.7 % |
+| contribution | 5.03 | 12.987 | +9.3 % |
+| contribution + budget (w·s curves) | 5.03 | **13.335** | +12.3 % |
+
+| comparison | k′≈5 |
+|---|---|
+| layer_topk(static) vs uniform static | −0.1 % [−2.3, +1.9] n.s. |
+| contribution+budget vs contribution | **+2.6 % [+1.4, +4.0]** worse |
+| contribution+budget vs score-only+budget | **+3.3 % [+1.4, +5.4]** worse |
+| contribution+budget vs static | **+5.5 % [+2.0, +8.6]** worse |
+
+The pre-registered expectation held: budgets are nearly flat on Qwen3 and allocation is neutral — static top-k's edge there is **not** about how it spends budget. The new fact is the last row: combining two individually neutral changes is significantly *worse* than either, because the budgets were allocated from the w·s share curves and the calibrated scale s is not merely uninformative on Qwen3 (F22, F24) but *wrong* — any use of it, for ranking or for allocation, degrades the model. Score-derived budgets are neutral.
+
+**What the two halves say together.** Whether w·s is a better signal than w is a per-model property; on OLMoE using it helps everywhere it is applied, on Qwen3 it hurts everywhere it is applied. That is exactly the kind of property a calibration pass can *measure directly* — by dropping experts under each rule on calibration tokens and comparing layer-output error — and select per layer. That is F30.
 
 ## Pending (running, in order)
 
-- **F27 — layer-adaptive budgets, Qwen3 half** (OLMoE half in §13): does allocation explain static top-k's advantage on Qwen3?
 - **F28 — downstream accuracy.** HellaSwag / ARC-Easy / PIQA, 200 examples each, continuation log-likelihood on the streaming engine, OLMoE at k′=5, five policies, paired per-example CIs.
 - **F29 — third model.** Qwen1.5-MoE-A2.7B (top-4 of 60, `norm_topk_prob=False`, always-on shared expert): engine validation against HF, calibration, sweep at k′ 3 and 2.5.
 
-Open question carried: a direction-aware skip criterion for routers where score beats output norm (Qwen3-class).
+- **F30 — per-layer signal selection.** On calibration tokens, compute every routed expert, drop m experts by w and by w·s, measure layer-output error under each; select the better signal per layer. Predicts contribution on OLMoE and score on Qwen3 without knowing which model it is. Running first; E6/E7 re-queued behind it.
