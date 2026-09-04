@@ -14,6 +14,10 @@ Every table in `docs/FINDINGS.md` and the README is generated from the files her
 | `calib/policy_calib_olmoe_2048tok.pt` | E1: per-layer sorted top-k traces, expert indices, output scales, median betas | all OLMoE policies |
 | `calib/policy_calib_qwen3_4096tok.pt` | same for Qwen3 (the 1,024-token version that produced F21 was overwritten; F21 is superseded by F22) | all Qwen3 policies |
 | `*/e*_*.log`, `*/f24_*.log` | console logs of the runs above, warnings stripped | provenance |
+| `olmoe/policy_sweep_olmoe_layerbudget.json`, `qwen3/policy_sweep_qwen3_layerbudget.json` | E5: matched-k′ sweeps including `layer_topk(static)`, `score_only+layerbudget`, `contribution+layerbudget` | F27 |
+| `olmoe/policy_downstream_olmoe.json` | E6: HellaSwag / ARC-Easy / PIQA accuracy at k′=5, per-example hits for paired CIs | F28 |
+| `qwen15/` | E7: third model (Qwen1.5-MoE-A2.7B, top-4 of 60, shared expert) — validation, calibration, sweep at k′ 3 and 2.5 | F29 |
+| `qwen3/policy_sweep_qwen3_norenorm.json`, `qwen3/policy_sweep_qwen3_renormfull.json` | F25 / F25b counterfactuals | §12 |
 | `*/depth_summary_g0.json` | compression-era gate G0 (F2/F11b) | F2 |
 
 Reproduce any of them with `scripts/reproduce.sh` (see its header for the order and runtimes).

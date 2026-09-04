@@ -205,3 +205,16 @@ def test_qwen15_engine_accounts_shared_expert_bytes_and_raw_topk():
            "moe_intermediate_size": 1408, "shared_expert_intermediate_size": 5632, "norm_topk_prob": False}
     e = StreamingQwen15MoE(S(), cfg, threads=1)
     assert e.expert_bytes == 3 * 1408 * 8 * 2 and e.shared_bytes == 3 * 5632 * 8 * 2 + 8 * 2 and e.k == 4
+
+
+
+def test_paired_accuracy_ci_detects_a_consistent_gain():
+    import sys, importlib.util, pathlib
+    spec = importlib.util.spec_from_file_location("pd3", pathlib.Path(__file__).resolve().parents[1] / "scripts" / "policy_downstream.py")
+    pd = importlib.util.module_from_spec(spec); sys.argv = ["x"]; spec.loader.exec_module(pd)
+    base = [1, 0] * 100                                   # 50 %
+    better = [1 if i % 5 else 1 for i in range(200)]      # 100 %
+    lo, md, hi = pd.paired_acc_ci(better, base)
+    assert lo > 0 and abs(md - 0.5) < 0.05
+    lo2, _, hi2 = pd.paired_acc_ci(base, base)
+    assert lo2 <= 0 <= hi2

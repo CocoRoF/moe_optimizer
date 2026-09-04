@@ -49,13 +49,21 @@ def loglik(eng, tok, ctx, cont, cache=None, ctx_logit=None):
     return float(lp.gather(1, full[n_ctx:].unsqueeze(1)).sum())
 
 def accuracy(eng, tok, examples):
-    correct = 0
+    """-> (accuracy, per-example correctness list) so policies can be compared paired."""
+    hits = []
     for ctx, choices, label in examples:
         c = tok(ctx, return_tensors="pt").input_ids[0]
         cache = {}; lg_ctx, _ = eng.forward(c, cache)
         scores = [loglik(eng, tok, ctx, ch, cache, lg_ctx[-1]) for ch in choices]
-        correct += int(max(range(len(scores)), key=lambda j: scores[j]) == label)
-    return correct / len(examples)
+        hits.append(int(max(range(len(scores)), key=lambda j: scores[j]) == label))
+    return sum(hits) / len(hits), hits
+
+def paired_acc_ci(a, b, B=5000, seed=0):
+    """Bootstrap CI of accuracy(a) - accuracy(b) over the same examples."""
+    import random; random.seed(seed); n = len(a); ds = []
+    for _ in range(B):
+        idx = [random.randrange(n) for _ in range(n)]; ds.append(sum(a[i] - b[i] for i in idx) / n)
+    ds.sort(); return ds[int(.025 * B)], ds[int(.5 * B)], ds[int(.975 * B)]
 
 if __name__ == "__main__":
     cal = torch.load(f"runs/policy_calib_{SHORT}.pt"); K, tr, ix, sc = cal["k"], cal["traces"], cal["indices"], cal["scale"]
@@ -69,8 +77,16 @@ if __name__ == "__main__":
     for task in TASKS:
         try: ex = load_task(task, N_EX)
         except Exception as exc: print(f"  {task}: skipped ({type(exc).__name__}: {str(exc)[:80]})", flush=True); continue
+        hits = {}
         for pol in pols:
-            eng = Eng(store, rm.config, policy=pol); acc = accuracy(eng, tok, ex); del eng; gc.collect()
-            res.setdefault(pol.name, {})[task] = acc
+            eng = Eng(store, rm.config, policy=pol); acc, h = accuracy(eng, tok, ex); del eng; gc.collect()
+            res.setdefault(pol.name, {})[task] = {"acc": acc, "hits": h}; hits[pol.name] = h
             print(f"  {task:<10} {pol.name:<30} acc={acc*100:5.1f}%  (n={len(ex)})", flush=True)
+        base = hits[pols[0].name]
+        for pol in pols[1:]:
+            lo, md, hi = paired_acc_ci(hits[pol.name], base)
+            print(f"  {task:<10} {pol.name:<30} vs top-8: {md*100:+5.1f} pts [{lo*100:+5.1f}, {hi*100:+5.1f}]", flush=True)
+        for a, b in ((f"contribution@{TARGET}", f"score_only@{TARGET}"), (f"contribution+layerbudget@{TARGET}", f"contribution@{TARGET}"), (f"contribution+layerbudget@{TARGET}", f"top{int(round(TARGET))}(static)")):
+            if a in hits and b in hits:
+                lo, md, hi = paired_acc_ci(hits[a], hits[b]); print(f"  {task:<10} {a} vs {b}: {md*100:+5.1f} pts [{lo*100:+5.1f}, {hi*100:+5.1f}]", flush=True)
     json.dump(res, open(f"runs/policy_downstream_{SHORT}.json", "w"), indent=1); print("DONE")
