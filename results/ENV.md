@@ -6,6 +6,7 @@
 | CPU | AMD Ryzen 9 6900HX with Radeon Graphics, 16 threads; runs capped at 11 (`OMP_NUM_THREADS=11`, `torch.set_num_threads(11)`) |
 | RAM | 28 GB; a 30 %-free rule was enforced (engine anonymous RSS 3.7–4.5 GB) |
 | GPU | none |
+| page cache | the streaming engine reads expert weights from the safetensors mmap; it runs at the reported speeds only while a model's shards stay resident in page cache (OLMoE 13 GB, Qwen3 57 GB — the latter never fits here, so its runs are NVMe-bound, F26). Any concurrent bulk disk write (e.g. a model download) evicts the shards and slows OLMoE runs ~3× (measured: 660–770 MB/s process reads, 28 % iowait). Run one model at a time with nothing else touching the disk. |
 | OS / kernel | Linux 6.8.0-124-generic |
 | Python | 3.12.3 |
 | torch | 2.14.0+cpu |
