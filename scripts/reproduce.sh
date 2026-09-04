@@ -36,7 +36,7 @@ echo "== 7b. clean counterfactual: renormalise to the full top-k mass (F25b)  ~1
 $PY scripts/policy_sweep.py $QWEN 4096 5 --renorm-full && $PY scripts/paired_bootstrap.py runs/policy_sweep_qwen3_renormfull.json
 echo "== 8. layer-adaptive budgets (F27) - produced by step 3 (policy_sweep runs layer_topk / +layerbudget policies) =="
 echo "== 9. downstream accuracy by log-likelihood (F28)  ~6 h =="
-$PY scripts/policy_downstream.py $OLMOE 200 5.0 hellaswag,arc_easy,piqa
+$PY scripts/policy_downstream.py $OLMOE 200 5.0 hellaswag,arc_easy,arc_challenge,openbookqa
 
 echo "== 10. third model: Qwen1.5-MoE-A2.7B (F29)  ~2.5 h =="
 Q15=Qwen/Qwen1.5-MoE-A2.7B

@@ -12,7 +12,7 @@ from moe_optimizer.runtime.calibrate import calibrate_taus, allocate_layer_budge
 MODEL = next((a for a in sys.argv[1:] if "/" in a), "allenai/OLMoE-1B-7B-0924")
 ARGS = [a for a in sys.argv[1:] if "/" not in a]; SHORT = MODEL.split("/")[-1].split("-")[0].lower()
 N_EX = int(ARGS[0]) if ARGS else 300; TARGET = float(ARGS[1]) if len(ARGS) > 1 else 5.0
-TASKS = ARGS[2].split(",") if len(ARGS) > 2 else ["hellaswag", "arc_easy", "piqa"]
+TASKS = ARGS[2].split(",") if len(ARGS) > 2 else ["hellaswag", "arc_easy", "arc_challenge", "openbookqa"]
 def _engine_cls(cfg):
     from moe_optimizer.runtime.stream import StreamingOLMoE, StreamingQwen3MoE, StreamingQwen15MoE
     mt = cfg.get("model_type", "")
@@ -27,8 +27,14 @@ def load_task(name, n):
     if name == "arc_easy":
         ds = load_dataset("allenai/ai2_arc", "ARC-Easy", split="test").select(range(n))
         return [("Question: " + r["question"] + "\nAnswer:", [" " + t for t in r["choices"]["text"]], r["choices"]["label"].index(r["answerKey"])) for r in ds]
-    if name == "piqa":
-        ds = load_dataset("ybisk/piqa", split="validation", trust_remote_code=True).select(range(n))
+    if name == "arc_challenge":
+        ds = load_dataset("allenai/ai2_arc", "ARC-Challenge", split="test").select(range(n))
+        return [("Question: " + r["question"] + "\nAnswer:", [" " + t for t in r["choices"]["text"]], r["choices"]["label"].index(r["answerKey"])) for r in ds]
+    if name == "openbookqa":
+        ds = load_dataset("allenai/openbookqa", "main", split="test").select(range(n))
+        return [("Question: " + r["question_stem"] + "\nAnswer:", [" " + t for t in r["choices"]["text"]], r["choices"]["label"].index(r["answerKey"])) for r in ds]
+    if name == "piqa":   # script-based on the Hub; unsupported by datasets >= 4 -> skipped by the caller
+        ds = load_dataset("ybisk/piqa", split="validation").select(range(n))
         return [("Question: " + r["goal"] + "\nAnswer:", [" " + r["sol1"], " " + r["sol2"]], int(r["label"])) for r in ds]
     raise ValueError(name)
 
