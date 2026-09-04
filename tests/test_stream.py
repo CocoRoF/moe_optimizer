@@ -194,3 +194,14 @@ def test_cached_loglik_matches_uncached_on_a_real_engine_shape_stub():
     e, t = Eng(), Tok(); ctx, cont = "123", "45"
     c = t(ctx).input_ids[0]; cache = {}; lg_ctx, _ = e.forward(c, cache)
     assert abs(pd.loglik(e, t, ctx, cont) - pd.loglik(e, t, ctx, cont, cache, lg_ctx[-1])) < 1e-6
+
+
+def test_qwen15_engine_accounts_shared_expert_bytes_and_raw_topk():
+    from moe_optimizer.runtime.stream import StreamingQwen15MoE
+    class S:
+        def get(self, k): return torch.zeros(4, 8)
+    cfg = {"num_hidden_layers": 1, "num_experts": 60, "num_experts_per_tok": 4, "hidden_size": 8,
+           "num_attention_heads": 2, "num_key_value_heads": 2, "intermediate_size": 5632,
+           "moe_intermediate_size": 1408, "shared_expert_intermediate_size": 5632, "norm_topk_prob": False}
+    e = StreamingQwen15MoE(S(), cfg, threads=1)
+    assert e.expert_bytes == 3 * 1408 * 8 * 2 and e.shared_bytes == 3 * 5632 * 8 * 2 + 8 * 2 and e.k == 4
