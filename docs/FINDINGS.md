@@ -213,6 +213,10 @@ Paired bootstrap (8 sequences): contribution vs score-only **+0.8 % [−0.9, +2.
 
 What remains is a model-level fact without a mechanism: on Qwen3-30B-A3B the router score is a better skip criterion than any output-norm quantity, mean or per-token, even though it is uncorrelated with output magnitude. A plausible reading — untested — is that expert *redundancy* matters more than magnitude there: dropping a large-norm expert whose direction is covered by kept ones costs little, and score may track that coverage. Testing it needs a direction-aware criterion, which is future work.
 
-## Pending
+## Pending (running, in order)
 
-Nothing running. Open question: a direction-aware skip criterion for routers where score beats output norm (Qwen3-class).
+- **F27 — layer-adaptive budgets.** `allocate_layer_budgets` chooses per-layer expert counts under a mean-k′ budget from the calibration curves (training-free); tested as a static baseline (`layer_topk`, LExI-style), a score-only control, and `contribution+layerbudget`. OLMoE 8,192 tokens at k′ 5/4, then Qwen3 4,096 at k′ 5, with paired bootstraps. This targets the one place static top-k wins (Qwen3).
+- **F28 — downstream accuracy.** HellaSwag / ARC-Easy / PIQA, 200 examples each, continuation log-likelihood on the streaming engine, OLMoE at k′=5, five policies, paired per-example CIs.
+- **F29 — third model.** Qwen1.5-MoE-A2.7B (top-4 of 60, `norm_topk_prob=False`, always-on shared expert): engine validation against HF, calibration, sweep at k′ 3 and 2.5.
+
+Open question carried: a direction-aware skip criterion for routers where score beats output norm (Qwen3-class).

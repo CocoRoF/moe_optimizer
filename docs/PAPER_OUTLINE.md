@@ -34,7 +34,10 @@
 | 5.4 Tail | wikitext/gsm8k/code, tail/mean | F19 |
 | 5.5 Generality | Qwen3 — **동률(null)**, oracle도 실패 → 신호 자체의 문제. renorm이 분리 변수. F25(renorm off): contribution −40 % — 방향 일치, 단 모델이 4× 손상되어 지지 증거에 그침. **F25b(full-mass renorm): 동률 유지, static 우세 → renorm 가설 기각.** 경계는 측정, 기제 미해명 | F21, F22, F24, F25, F25b |
 | 5.6 Ablation | contribution vs score-only vs static; linear vs squared share (F23); renorm 오차모델 (F22); **proxy vs oracle (F24: OLMoE 동률 — proxy 충분)** | F15, F22, F23, F24 |
-| 6 Limitations | 절대 비용(+9.8% @ 37.5% 절감), ZEDA 대비, 모델 2개, CPU fp32 무대 | 아래 |
+| 5.7 Layer budgets | 층별 예산 배분 (contribution+layerbudget vs LExI-style static vs uniform) — static이 이기는 Qwen3를 겨냥 | **F27(실행 중)** |
+| 5.8 Downstream | HellaSwag/ARC-Easy/PIQA loglikelihood 정확도, paired CI | **F28(대기)** |
+| 5.9 Third model | Qwen1.5-MoE-A2.7B (top-4/60, shared expert, unnormalised) | **F29(대기)** |
+| 6 Limitations | 절대 비용(+9.8% @ 37.5% 절감), ZEDA 대비, 모델 2→3개, CPU fp32 무대 | 아래 |
 | 7 Conclusion | | |
 
 ## 그림/표 목록
