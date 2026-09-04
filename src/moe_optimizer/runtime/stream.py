@@ -527,3 +527,73 @@ class StreamingQwen15MoE(StreamingOLMoE):
                 self.record_output_norms[l][e, 1] += y.shape[0]
             out = out.index_add(0, slot_tok, y * we.unsqueeze(1))
         return h + out
+
+
+class MixedPolicy(ExpertPolicy):
+    """Per-layer signal selection (F30): rank by w*s in layers where calibration
+    showed the contribution rule gives lower layer-output error, by w elsewhere.
+    ``use_scale[l]`` is the per-layer choice; tau is per layer as usual."""
+
+    def __init__(self, k: int, scale: dict, tau: dict, use_scale: dict, min_keep: int = 1) -> None:
+        self.k, self.scale, self.tau, self.use_scale, self.min_keep = k, scale, tau, use_scale, min_keep
+        self.name = "mixed"
+
+    def select(self, probs, layer):
+        w, i = probs.topk(self.k, dim=-1)
+        c = w * self.scale[layer][i] if self.use_scale.get(layer, False) else w
+        c_sorted, order = c.sort(-1, descending=True)
+        cum = (c_sorted / c_sorted.sum(-1, keepdim=True).clamp_min(1e-12)).cumsum(-1)
+        thr = 1.0 - self.tau.get(layer, 0.0)
+        keep_sorted = torch.cat([torch.ones_like(cum[:, :1], dtype=torch.bool), cum[:, :-1] < thr], 1)
+        keep_sorted[:, : self.min_keep] = True
+        keep = torch.zeros_like(keep_sorted).scatter(1, order, keep_sorted)
+        return i, w * keep
+
+
+@torch.no_grad()
+def signal_selection_pass(engine, ids: torch.Tensor, scale: dict, drops=(1, 2, 3)) -> dict:
+    """F30 calibration: for every layer, compute all routed experts on ``ids``
+    and measure the layer-output error of dropping the m lowest experts by
+    score (w) and by contribution (w*s).  Returns per-layer mean relative
+    errors for each rule and m, and the per-layer choice (lower error at the
+    middle drop level).  Uses the engine's oracle machinery; bytes are not the
+    point here."""
+    L = engine.L; err = {l: {"score": [0.0] * len(drops), "contrib": [0.0] * len(drops), "n": 0} for l in range(L)}
+    renorm_full_mass = getattr(engine, "renorm", False)
+
+    def hook_layer(l, x, idx, w):
+        T, k = idx.shape; ys = torch.zeros((T, k, x.shape[1]), dtype=engine.dtype)
+        for e in idx.unique().tolist():
+            tok, pos = torch.where(idx == e); xe = x[tok]
+            g = xe @ engine.store.expert(Slot(l, "gate"), e).to(engine.dtype).T
+            u = xe @ engine.store.expert(Slot(l, "up"), e).to(engine.dtype).T
+            ys[tok, pos] = (F.silu(g) * u) @ engine.store.expert(Slot(l, "down"), e).to(engine.dtype).T
+        w_eff = w / w.sum(-1, keepdim=True) if renorm_full_mass is True else w
+        full = (ys * w_eff.unsqueeze(-1)).sum(1); norm = full.norm(dim=-1).clamp_min(1e-12)
+        for name, key in (("score", w), ("contrib", w * scale[l][idx])):
+            order = key.argsort(-1, descending=True)
+            for j, m in enumerate(drops):
+                keep = torch.zeros_like(w, dtype=torch.bool).scatter(1, order[:, : k - m], True)
+                wk = w * keep
+                if renorm_full_mass is True: wk = wk / wk.sum(-1, keepdim=True).clamp_min(1e-12)
+                out = (ys * wk.unsqueeze(-1)).sum(1)
+                err[l][name][j] += float(((out - full).norm(dim=-1) / norm).sum())
+        err[l]["n"] += T
+        return full
+
+    # run the model once, replacing each MoE block's expert computation with the probe
+    orig = engine.policy; engine.policy = TopKPolicy(engine.k)
+    orig_oracle = engine._oracle_moe
+    def probe(l, x, idx, w, renorm=False): return hook_layer(l, x, idx, w)
+    engine._oracle_moe = probe; engine.oracle_tau = {l: 0.0 for l in range(L)}
+    try:
+        n = ids.numel() // 512
+        for i in range(n): engine.forward(ids[i * 512:(i + 1) * 512])
+    finally:
+        engine._oracle_moe = orig_oracle; engine.oracle_tau = None; engine.policy = orig
+    out = {}
+    mid = len(drops) // 2
+    for l in range(L):
+        n = max(err[l]["n"], 1); s_ = [v / n for v in err[l]["score"]]; c_ = [v / n for v in err[l]["contrib"]]
+        out[l] = {"score_err": s_, "contrib_err": c_, "use_scale": c_[mid] < s_[mid]}
+    return out

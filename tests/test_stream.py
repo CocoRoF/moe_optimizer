@@ -218,3 +218,14 @@ def test_paired_accuracy_ci_detects_a_consistent_gain():
     assert lo > 0 and abs(md - 0.5) < 0.05
     lo2, _, hi2 = pd.paired_acc_ci(base, base)
     assert lo2 <= 0 <= hi2
+
+
+def test_mixed_policy_uses_scale_only_in_selected_layers():
+    from moe_optimizer.runtime.stream import MixedPolicy, ContributionPolicy
+    p = torch.tensor([[0.4, 0.35, 0.15, 0.10]]); scale = {0: torch.tensor([0.1, 0.1, 10.0, 0.1]), 1: torch.tensor([0.1, 0.1, 10.0, 0.1])}
+    tau = {0: 0.5, 1: 0.5}
+    m = MixedPolicy(4, scale, tau, {0: True, 1: False})
+    _, w0 = m.select(p, 0); _, w1 = m.select(p, 1)
+    _, wc = ContributionPolicy(4, scale, tau).select(p, 0)
+    _, ws = ContributionPolicy(4, {0: torch.ones(4)}, tau).select(p, 0)
+    assert torch.equal(w0 > 0, wc > 0) and torch.equal(w1 > 0, ws > 0)
