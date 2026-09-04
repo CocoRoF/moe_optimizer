@@ -19,6 +19,7 @@
 | model | repo id | snapshot revision | config facts used |
 |---|---|---|---|
 | OLMoE-1B-7B | `allenai/OLMoE-1B-7B-0924` | `6d84c48581ece794365f2b8e9cfb043c68ade9c5` | 16 layers, 64 experts, top-8, d=2048, d_ff=1024, `norm_topk_prob=False`, MHA 16 heads, RoPE θ=1e4, RMSNorm eps 1e-5 |
+| Qwen1.5-MoE-A2.7B | `Qwen/Qwen1.5-MoE-A2.7B` | `1a758c50ecb6350748b9ce0a99d2352fd9fc11c9` | 24 layers, 60 experts, top-4, d=2048, moe_d_ff=1408, shared expert d_ff=5632 (sigmoid-gated, always on), `norm_topk_prob=False`, MHA 16 heads, q/k/v bias, RoPE θ=1e6, eps 1e-6 |
 | Qwen3-30B-A3B | `Qwen/Qwen3-30B-A3B` | `ad44e777bcd18fa416d9da3bd8f70d33ebb85d39` | 48 layers, 128 experts, top-8, d=2048, moe_d_ff=768, `norm_topk_prob=True`, GQA 32/4, head_dim 128, RoPE θ=1e6, eps 1e-6 |
 
 ## Data
