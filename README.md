@@ -67,7 +67,7 @@ tests/                   37 tests: policy exactness, engine round-trips, bootstr
 - **Pre-registered gates.** Kill conditions (G1–G4) were written before the runs; outcomes are in FINDINGS §9, including the failures.
 - **Bytes, not FLOPs.** The engine counts bytes moved; a skipped expert is a measured saving, not a modelled one.
 - **Error bars.** Per-sequence NLL is logged and every headline comparison is a paired bootstrap on identical text.
-- **Sequence long jobs in one shell; never guard on `pgrep -f` or git state.** Four chained runs deadlocked on self-matching guards; the working pattern is sequential steps with a free-memory gate only.
+- **Sequence long jobs in one shell; never guard on `pgrep -f` or git state; never kill by marker.** Five chained runs deadlocked or killed themselves on self-matching text: `pgrep -f "<pattern>"` from a script whose own command line contained the pattern (via the guard line, a relaunch line, and `pkill`), a `git log` guard a later commit made unsatisfiable, and `pkill -f "[E]7 DONE"` from a chain whose own marker was `E6E7 DONE`. The bracket trick protects only its own line. Working pattern: one background shell runs each step in the foreground, sequentially; the only gate is free memory; completion markers are unique strings that are not substrings of one another; a chain never kills processes.
 - **Static check.** `pyflakes` over `scripts/` and `src/` runs in the test suite after two runs died on a `NameError` that `ast.parse` cannot see.
 
 ## Limitations
