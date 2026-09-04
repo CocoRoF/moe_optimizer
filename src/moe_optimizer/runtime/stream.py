@@ -445,3 +445,17 @@ def decode_benchmark(engine: StreamingOLMoE, ids: torch.Tensor, prefill: int = 3
             "MB_per_tok": tot_bytes / steps / 1e6, "expert_loads_per_tok": tot_loads / steps,
             "mean_k": sum(ks) / len(ks), "decode_ppl": math.exp(nll / max(steps - 1, 1)),
             "cache_consistency_max_dlogit": consistency}
+
+
+class LayerTopKPolicy(ExpertPolicy):
+    """LExI-style static baseline: a fixed expert count per layer, no per-token
+    decision.  Fractional budgets are realised by rounding per layer."""
+
+    def __init__(self, k: int, budgets: dict[int, float]) -> None:
+        self.k, self.budgets = k, budgets; self.name = "layer_topk(static)"
+
+    def select(self, probs, layer):
+        kl = int(round(self.budgets.get(layer, self.k)))
+        w, i = probs.topk(self.k, dim=-1)
+        keep = torch.zeros_like(w, dtype=torch.bool); keep[:, :max(kl, 1)] = True
+        return i, w * keep

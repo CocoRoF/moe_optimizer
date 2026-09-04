@@ -16,6 +16,11 @@ def ci(a, b):
 print(f"paired bootstrap over {len(next(iter(rows.values())))} sequences, B={B}")
 for t in ("6.0", "5.0", "4.0"):
     c, q, s = rows.get(f"contribution@k'={t}"), rows.get(f"score_only@k'={t}"), rows.get(f"top{int(float(t))}(static)")
+    cl, lt, ql = rows.get(f"contribution+layerbudget@k'={t}"), rows.get(f"layer_topk(static)@k'={t}"), rows.get(f"score_only+layerbudget@k'={t}")
+    def lab(lo, hi): return "SIGNIFICANT (better)" if hi < 0 else "SIGNIFICANT (worse)" if lo > 0 else "n.s."
+    for a, bb, name in ((cl, c, "contribution+layerbudget vs contribution"), (cl, lt, "contribution+layerbudget vs layer_topk(static)"),
+                        (cl, s, "contribution+layerbudget vs static top-k"), (lt, s, "layer_topk(static) vs static top-k"), (cl, ql, "contribution+layerbudget vs score_only+layerbudget")):
+        if a and bb: lo, md, hi = ci(a, bb); print(f"  k'~{t}: {name:<50} {md*100:+5.1f}%  [{lo*100:+5.1f}, {hi*100:+5.1f}]  {lab(lo, hi)}")
     def lab(lo, hi): return "SIGNIFICANT (better)" if hi < 0 else "SIGNIFICANT (worse)" if lo > 0 else "n.s."
     if c and q: lo, md, hi = ci(c, q); print(f"  k'~{t}: contribution vs score-only  {md*100:+5.1f}%  [{lo*100:+5.1f}, {hi*100:+5.1f}]  {lab(lo, hi)}")
     if c and s: lo, md, hi = ci(c, s); print(f"  k'~{t}: contribution vs static      {md*100:+5.1f}%  [{lo*100:+5.1f}, {hi*100:+5.1f}]  {lab(lo, hi)}")

@@ -4,8 +4,8 @@ sys.path.insert(0, "src")
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from moe_optimizer.io.checkpoint import ExpertStore, resolve_model
-from moe_optimizer.runtime.stream import TopKPolicy, MassRatioPolicy, ContributionPolicy, ContributionRenormPolicy
-from moe_optimizer.runtime.calibrate import calibrate_taus, calibrate_taus_err
+from moe_optimizer.runtime.stream import TopKPolicy, MassRatioPolicy, ContributionPolicy, ContributionRenormPolicy, LayerTopKPolicy
+from moe_optimizer.runtime.calibrate import calibrate_taus, calibrate_taus_err, allocate_layer_budgets, calibrate_taus_per_layer_target
 MODEL = next((a for a in sys.argv[1:] if "/" in a), "allenai/OLMoE-1B-7B-0924")
 ARGS = [a for a in sys.argv[1:] if "/" not in a]
 SHORT = MODEL.split("/")[-1].split("-")[0].lower()          # olmoe | qwen3
@@ -52,5 +52,12 @@ for t in TARGETS:
     tau_c = calibrate_taus(tr, sc, ix, t); c = ContributionPolicy(K, sc, tau_c); c.name = f"contribution@k'={t}"; rows.append(run(c))
     renorm = bool(rm.config.get("norm_topk_prob", False)) and not NO_RENORM and not FULL_RENORM
     tau_r = calibrate_taus_err(tr, sc, ix, t, renorm); r_ = ContributionRenormPolicy(K, sc, tau_r, renorm=renorm); r_.name = f"{r_.name}@k'={t}"; rows.append(run(r_))
+    # ---- layer-adaptive budgets (training-free, from the same calibration traces)
+    b_gate = allocate_layer_budgets(tr, None, ix, t)                     # budgets from gate-weight curves
+    b_contrib = allocate_layer_budgets(tr, sc, ix, t)                    # budgets from contribution curves
+    lt = LayerTopKPolicy(K, b_gate); lt.name = f"layer_topk(static)@k'={t}"; rows.append(run(lt))
+    ql = ContributionPolicy(K, {l: torch.ones_like(sc[l]) for l in sc}, calibrate_taus_per_layer_target(tr, None, ix, b_gate)); ql.name = f"score_only+layerbudget@k'={t}"; rows.append(run(ql))
+    cl = ContributionPolicy(K, sc, calibrate_taus_per_layer_target(tr, sc, ix, b_contrib)); cl.name = f"contribution+layerbudget@k'={t}"; rows.append(run(cl))
+    rows[-1]["budgets"] = {int(l): v for l, v in b_contrib.items()}
 json.dump(rows, open(f"runs/policy_sweep_{SHORT}{'_norenorm' if NO_RENORM else '_renormfull' if FULL_RENORM else ''}.json", "w"), indent=1)
 print("DONE")

@@ -97,3 +97,55 @@ def calibrate_taus_err(traces, scale, indices, target_k: float, renorm: bool, mi
             else: hi = mid
         out[l] = 0.5 * (lo + hi)
     return out
+
+
+# --------------------------------------------------------------------------- #
+#  layer-adaptive budget allocation
+# --------------------------------------------------------------------------- #
+def marginal_curves(traces, scale, indices) -> dict[int, torch.Tensor]:
+    """Per layer, (k,) mean share of the ranking quantity carried by the j-th
+    ranked expert (j = 1..k).  With scale=None the ranking quantity is the gate
+    weight; with scale it is the contribution w*s.  These are the per-layer
+    'what does the j-th expert buy' curves the allocator trades off."""
+    out = {}
+    for l, w in traces.items():
+        c = w if scale is None else w * scale[l][indices[l]]
+        c_sorted = c.sort(1, descending=True).values
+        out[l] = (c_sorted / c_sorted.sum(1, keepdim=True).clamp_min(1e-12)).mean(0)
+    return out
+
+
+def allocate_layer_budgets(traces, scale, indices, target_k: float, k_min: int = 1,
+                           k_max: int | None = None) -> dict[int, float]:
+    """Choose a per-layer expert count k_l with mean(k_l) = target_k so that the
+    total dropped share (sum over layers of the tail of each layer's marginal
+    curve) is minimised.  Greedy: start every layer at k_max and repeatedly
+    remove the expert whose removal costs least, until the budget is met.
+    Training-free; uses only the calibration traces.  Fractional targets are
+    met by distributing the remainder to the layers with the largest next
+    marginal gain."""
+    curves = marginal_curves(traces, scale, indices); layers = sorted(curves)
+    K = next(iter(curves.values())).numel(); k_max = k_max or K
+    k = {l: k_max for l in layers}
+    total_budget = target_k * len(layers)
+    while sum(k.values()) > total_budget + 1e-9:
+        # cost of dropping the current last expert in each layer that can still shrink
+        cand = [(float(curves[l][k[l] - 1]), l) for l in layers if k[l] > k_min]
+        if not cand: break
+        _, l = min(cand); k[l] -= 1
+    # fractional remainder: give partial credit to the layer with the largest next gain
+    rem = total_budget - sum(k.values())
+    out = {l: float(v) for l, v in k.items()}
+    if rem > 1e-9:
+        gains = sorted(((float(curves[l][int(k[l])]) if k[l] < K else -1.0, l) for l in layers), reverse=True)
+        for g, l in gains:
+            if rem <= 1e-9 or g < 0: break
+            add = min(1.0, rem); out[l] += add; rem -= add
+    return out
+
+
+def calibrate_taus_per_layer_target(traces, scale, indices, budgets: dict[int, float],
+                                    min_keep: int = 1) -> dict[int, float]:
+    """tau_l so that layer l's mean kept count equals its own budget k_l."""
+    cs = cumulative_share(traces, scale, indices)
+    return {l: tau_for_target_k(cs[l], budgets[l], min_keep) for l in cs}
