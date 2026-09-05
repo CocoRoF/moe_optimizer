@@ -532,16 +532,24 @@ class StreamingQwen15MoE(StreamingOLMoE):
 class MixedPolicy(ExpertPolicy):
     """Per-layer signal selection (F30): rank by w*s in layers where calibration
     showed the contribution rule gives lower layer-output error, by w elsewhere.
-    ``use_scale[l]`` is the per-layer choice; tau is per layer as usual."""
+    ``use_scale[l]`` is the per-layer choice (bool); tau is per layer as usual.
+    Optional per-layer ``mode`` (F31): "static" keeps a fixed top-k_l by the
+    chosen signal instead of a per-token threshold."""
 
-    def __init__(self, k: int, scale: dict, tau: dict, use_scale: dict, min_keep: int = 1) -> None:
-        self.k, self.scale, self.tau, self.use_scale, self.min_keep = k, scale, tau, use_scale, min_keep
-        self.name = "mixed"
+    def __init__(self, k, scale, tau, use_scale, min_keep: int = 1, mode=None, static_k=None) -> None:
+        self.k, self.scale, self.tau, self.min_keep = k, scale, tau, min_keep
+        self.use_scale = {l: (v is True or v == "contribution") for l, v in use_scale.items()}
+        self.mode, self.static_k = mode or {}, static_k or {}
+        self.name = "mixed+mode" if mode else "mixed"
 
     def select(self, probs, layer):
         w, i = probs.topk(self.k, dim=-1)
         c = w * self.scale[layer][i] if self.use_scale.get(layer, False) else w
         c_sorted, order = c.sort(-1, descending=True)
+        if self.mode.get(layer) == "static":
+            kl = max(int(round(self.static_k.get(layer, self.k))), self.min_keep)
+            keep = torch.zeros_like(w, dtype=torch.bool).scatter(1, order[:, :kl], True)
+            return i, w * keep
         cum = (c_sorted / c_sorted.sum(-1, keepdim=True).clamp_min(1e-12)).cumsum(-1)
         thr = 1.0 - self.tau.get(layer, 0.0)
         keep_sorted = torch.cat([torch.ones_like(cum[:, :1], dtype=torch.bool), cum[:, :-1] < thr], 1)
@@ -550,7 +558,45 @@ class MixedPolicy(ExpertPolicy):
         return i, w * keep
 
 
-@torch.no_grad()
+def mode_selection_pass(engine, ids, scale, choice, target_k: float, seq_len: int = 512) -> dict:
+    """F31. Per layer: fixed per-layer count (static) vs per-token threshold (dynamic)
+    at the same mean k', each using the signal that layer chose; scored by the
+    layer-output error against the full top-k output. {layer: {mode, err_static, err_dynamic}}."""
+    import torch
+    L = engine.L; ks = int(round(target_k)); out = {}
+    err_s = {l: [] for l in range(L)}; err_d = {l: [] for l in range(L)}
+    n = ids.numel() // seq_len
+    for i in range(n):
+        seq = ids[i * seq_len:(i + 1) * seq_len]
+        cache = {}; h = engine.embed[seq]; cos, sin = engine._rope(seq.numel(), 0)
+        for l in range(L):
+            x, probs, idx, w, ys, h_attn = engine._layer_probe(l, h, cos, sin, cache)
+            renorm = getattr(engine, "renorm", False) is True
+            w_eff = w / w.sum(-1, keepdim=True).clamp_min(1e-12) if renorm else w
+            full = (ys * w_eff.unsqueeze(-1)).sum(1)
+            c = w * scale[l][idx] if (choice[l] is True or choice[l] == "contribution") else w
+            order = c.argsort(-1, descending=True)
+            keep_s = torch.zeros_like(w, dtype=torch.bool).scatter(1, order[:, :ks], True)
+            c_sorted = c.gather(1, order); share = (c_sorted / c_sorted.sum(-1, keepdim=True).clamp_min(1e-12)).cumsum(-1)
+            lo, hi = 0.0, 1.0
+            for _ in range(30):
+                mid = 0.5 * (lo + hi)
+                kt = torch.cat([torch.ones_like(share[:, :1], dtype=torch.bool), share[:, :-1] < 1 - mid], 1).sum(1).float().mean()
+                if kt > target_k: lo = mid
+                else: hi = mid
+            keep_sorted = torch.cat([torch.ones_like(share[:, :1], dtype=torch.bool), share[:, :-1] < 1 - 0.5 * (lo + hi)], 1)
+            keep_d = torch.zeros_like(keep_sorted).scatter(1, order, keep_sorted)
+            for keep, store in ((keep_s, err_s), (keep_d, err_d)):
+                wk = w * keep
+                if renorm: wk = wk / wk.sum(-1, keepdim=True).clamp_min(1e-12)
+                store[l].append(float(((ys * wk.unsqueeze(-1)).sum(1) - full).norm() / full.norm().clamp_min(1e-12)))
+            h = h_attn + full
+    for l in range(L):
+        es, ed = sum(err_s[l]) / len(err_s[l]), sum(err_d[l]) / len(err_d[l])
+        out[l] = {"mode": "dynamic" if ed < es else "static", "err_static": es, "err_dynamic": ed}
+    return out
+
+
 def signal_selection_pass(engine, ids: torch.Tensor, scale: dict, drops=(1, 2, 3)) -> dict:
     """F30 calibration: for every layer, compute all routed experts on ``ids``
     and measure the layer-output error of dropping the m lowest experts by

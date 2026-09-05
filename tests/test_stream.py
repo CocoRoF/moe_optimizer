@@ -229,3 +229,13 @@ def test_mixed_policy_uses_scale_only_in_selected_layers():
     _, wc = ContributionPolicy(4, scale, tau).select(p, 0)
     _, ws = ContributionPolicy(4, {0: torch.ones(4)}, tau).select(p, 0)
     assert torch.equal(w0 > 0, wc > 0) and torch.equal(w1 > 0, ws > 0)
+
+
+def test_mixed_policy_static_mode_keeps_fixed_count_by_chosen_signal():
+    from moe_optimizer.runtime.stream import MixedPolicy
+    p = torch.tensor([[0.30, 0.25, 0.20, 0.15, 0.10]]); scale = {0: torch.tensor([0.1, 0.1, 5.0, 0.1, 0.1])}
+    pol = MixedPolicy(5, scale, {0: 0.0}, {0: True}, mode={0: "static"}, static_k={0: 2})
+    i, w = pol.select(p, 0); kept = i[w > 0].tolist()
+    assert len(kept) == 2 and 2 in kept                 # expert 2 (huge scale) kept despite 3rd-lowest weight
+    pol2 = MixedPolicy(5, scale, {0: 0.0}, {0: False}, mode={0: "static"}, static_k={0: 2})
+    assert set(pol2.select(p, 0)[0][pol2.select(p, 0)[1] > 0].tolist()) == {0, 1}
