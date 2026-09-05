@@ -197,7 +197,18 @@ class StreamingOLMoE:
         self.theta = config.get("rope_theta", 10000.0)
         self.policy = policy or TopKPolicy(self.k)
         self.expert_bytes = 3 * config["intermediate_size"] * self.d * 2   # bf16 on disk
-        self._g = lambda k: self.store.get(k).to(self.dtype)
+        self._wcache: dict[str, torch.Tensor] = {}
+        def _g(k, _self=self):
+            # Non-expert weights (attention, norms, router, embeddings) are ~0.8 GB
+            # fp32 on OLMoE and are read on every forward; converting them once and
+            # keeping them resident is exact and removes ~1/3 of per-forward cost.
+            # Expert weights are never cached here (24 GB fp32 on OLMoE) -- they are
+            # the streamed, bandwidth-counted part.
+            t = _self._wcache.get(k)
+            if t is None:
+                t = _self.store.get(k).to(_self.dtype); _self._wcache[k] = t
+            return t
+        self._g = _g
         self.embed = self._g("model.embed_tokens.weight")
         self.final_norm = self._g("model.norm.weight")
         self.lm_head = self._g("lm_head.weight")

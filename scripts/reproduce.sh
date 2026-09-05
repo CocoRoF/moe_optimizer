@@ -46,4 +46,6 @@ $PY scripts/policy_sweep.py $Q15 4096 3,2.5 && $PY scripts/paired_bootstrap.py r
 echo "== 11. per-layer signal selection (F30)  ~1 h / ~2.5 h =="
 $PY scripts/signal_select.py $OLMOE 1024 8192 5,4 --mode   # --mode adds the F31 dynamic-vs-static rows
 $PY scripts/signal_select.py $QWEN  1024 4096 5   --mode
+echo "== 12. the loss-vs-savings table =="
+$PY scripts/report_pareto.py olmoe; $PY scripts/report_pareto.py qwen3
 echo "done. Compare runs/*.json against results/."

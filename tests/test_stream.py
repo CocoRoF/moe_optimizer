@@ -239,3 +239,17 @@ def test_mixed_policy_static_mode_keeps_fixed_count_by_chosen_signal():
     assert len(kept) == 2 and 2 in kept                 # expert 2 (huge scale) kept despite 3rd-lowest weight
     pol2 = MixedPolicy(5, scale, {0: 0.0}, {0: False}, mode={0: "static"}, static_k={0: 2})
     assert set(pol2.select(p, 0)[0][pol2.select(p, 0)[1] > 0].tolist()) == {0, 1}
+
+
+def test_weight_cache_is_exact_and_excludes_experts():
+    """The cached non-expert weights must reproduce the uncached tensors bit-for-bit,
+    and expert weights must never enter the cache (they are the streamed part)."""
+    from moe_optimizer.runtime.stream import StreamingOLMoE
+    class S:
+        def __init__(self): self.calls = 0
+        def get(self, k): self.calls += 1; return torch.arange(4.0).view(2, 2) + len(k)
+    cfg = {"num_hidden_layers": 1, "num_experts": 4, "num_experts_per_tok": 2, "hidden_size": 2, "intermediate_size": 3, "num_attention_heads": 1}
+    e = StreamingOLMoE(S(), cfg, threads=1)
+    a = e._g("model.layers.0.self_attn.q_proj.weight"); b = e._g("model.layers.0.self_attn.q_proj.weight")
+    assert a is b and torch.equal(a, S().get("model.layers.0.self_attn.q_proj.weight").float())
+    assert all("experts" not in k for k in e._wcache)

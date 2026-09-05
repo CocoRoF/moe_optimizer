@@ -20,14 +20,19 @@ rows = json.load(open(files[0])); base = next(r for r in rows if r["policy"] == 
 n_tok = len(base["per_seq_nll"]) * 512
 ds_path = next((f for f in (f"results/{SHORT}/policy_downstream_{SHORT}.json", f"runs/policy_downstream_{SHORT}.json", f"runs/policy_downstream_{SHORT}.ckpt.json") if os.path.exists(f)), None)
 ds = json.load(open(ds_path)) if ds_path else {}
+dec_path = next((f for f in (f"results/{SHORT}/decode_bench_{SHORT}.json", f"runs/decode_bench_{SHORT}.json") if os.path.exists(f)), None)
+dec = {d["policy"].replace("@", "@k'="): d for d in json.load(open(dec_path))} if dec_path else {}
+dec_base = dec.get("top8")
 tasks = sorted({t for v in ds.values() for t in v}) if ds else []
 print(f"# {SHORT}: source {files[0]} ({n_tok:,} test tokens, {len(base['per_seq_nll'])} seqs){'; downstream ' + ds_path if ds_path else '; downstream: NOT MEASURED'}")
-hdr = f"{'policy':<34} {'k′':>5} {'loads −%':>9} {'bytes −%':>9} {'ppl':>8} {'Δppl% [95% CI]':>24}" + "".join(f" {'Δ'+t+' pts [CI]':>26}" for t in tasks)
+hdr = f"{'policy':<34} {'k′':>5} {'loads −%':>9} {'decode MB/tok':>14} {'decode tok/s':>13} {'ppl':>8} {'Δppl% [95% CI]':>24}" + "".join(f" {'Δ'+t+' pts [CI]':>26}" for t in tasks)
 print(hdr); print("-" * len(hdr))
 for r in sorted(rows, key=lambda r: -r["mean_k"]):
     lo, md, hi = ci_ratio(r["per_seq_nll"], base["per_seq_nll"]) if r["policy"] != "top8" else (0, 0, 0)
-    loads = (1 - r["mean_k"] / K) * 100; byt = (1 - r["MB_per_tok"] / base["MB_per_tok"]) * 100
-    line = f"{r['policy']:<34} {r['mean_k']:>5.2f} {loads:>8.1f}% {byt:>8.1f}% {r['ppl']:>8.3f} {md*100:>+7.1f}% [{lo*100:+.1f},{hi*100:+.1f}]"
+    loads = (1 - r["mean_k"] / K) * 100
+    d = dec.get(r["policy"]) or dec.get(r["policy"].replace("(static)", "(static)"))
+    dmb = f"{d['MB_per_tok']:>13.0f}" if d else f"{'—':>13}"; dts = f"{d['tok_per_s']:>12.2f}" if d else f"{'—':>12}"
+    line = f"{r['policy']:<34} {r['mean_k']:>5.2f} {loads:>8.1f}% {dmb} {dts} {r['ppl']:>8.3f} {md*100:>+7.1f}% [{lo*100:+.1f},{hi*100:+.1f}]"
     for t in tasks:
         name = r["policy"].replace("@k'=", "@")
         a = ds.get(name, {}).get(t, {}).get("hits"); b = ds.get("top8", {}).get(t, {}).get("hits")
@@ -36,4 +41,4 @@ for r in sorted(rows, key=lambda r: -r["mean_k"]):
         elif r["policy"] == "top8" and b: line += f" {'acc %.1f%%' % (100*sum(b)/len(b)):>26}"
         else: line += f" {'—':>26}"
     print(line)
-print("\nloads −% = expert loads avoided per token (k′ vs top-8); bytes −% is the prefill bytes/token which amortises across a sequence — batch-1 decode bytes scale with loads −% (F16).")
+print("\nloads −% = expert loads avoided per token (k′ vs top-8). decode MB/tok and tok/s are batch-1 measurements (F16) where available; they scale linearly with loads −%.")
