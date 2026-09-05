@@ -79,14 +79,21 @@ if __name__ == "__main__":
     q = ContributionPolicy(K, {l: torch.ones_like(sc[l]) for l in sc}, calibrate_taus(tr, None, ix, TARGET)); q.name = f"score_only@{TARGET}"; pols.append(q)
     c = ContributionPolicy(K, sc, calibrate_taus(tr, sc, ix, TARGET)); c.name = f"contribution@{TARGET}"; pols.append(c)
     bc = allocate_layer_budgets(tr, sc, ix, TARGET); cl = ContributionPolicy(K, sc, calibrate_taus_per_layer_target(tr, sc, ix, bc)); cl.name = f"contribution+layerbudget@{TARGET}"; pols.append(cl)
-    res = {}
+    import os
+    CKPT = f"runs/policy_downstream_{SHORT}.ckpt.json"
+    res = json.load(open(CKPT)) if os.path.exists(CKPT) else {}
+    if res: print(f"resuming from {CKPT}: {sum(len(v) for v in res.values())} (policy, task) results", flush=True)
     for task in TASKS:
         try: ex = load_task(task, N_EX)
         except Exception as exc: print(f"  {task}: skipped ({type(exc).__name__}: {str(exc)[:80]})", flush=True); continue
         hits = {}
         for pol in pols:
+            done = res.get(pol.name, {}).get(task)
+            if done and len(done.get("hits", [])) == len(ex):          # resumed from checkpoint
+                hits[pol.name] = done["hits"]; print(f"  {task:<10} {pol.name:<30} acc={done['acc']*100:5.1f}%  (n={len(ex)})  [checkpoint]", flush=True); continue
             eng = Eng(store, rm.config, policy=pol); acc, h = accuracy(eng, tok, ex); del eng; gc.collect()
             res.setdefault(pol.name, {})[task] = {"acc": acc, "hits": h}; hits[pol.name] = h
+            json.dump(res, open(CKPT, "w"), indent=1)                    # checkpoint after every policy
             print(f"  {task:<10} {pol.name:<30} acc={acc*100:5.1f}%  (n={len(ex)})", flush=True)
         base = hits[pols[0].name]
         for pol in pols[1:]:
