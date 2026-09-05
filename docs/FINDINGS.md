@@ -281,11 +281,23 @@ On 1,024 calibration tokens every routed expert is computed, and for each layer 
 
 **Pre-registered expectation for Qwen3-30B-A3B (written before its pass ran):** a clear majority of layers (≥ 75 %) choose *score*, in line with F22/F24/F27 where every use of the scale hurt; the mixed policy then matches score-only there and contribution on OLMoE — one rule, both regimes. If instead Qwen3's layers mostly choose contribution while the sweep still favours score, the local error is not the right selection criterion and this section records a second null.
 
-Sweep results (mixed vs score-only / contribution / static, paired bootstrap): pending.
+**Qwen3-30B-A3B — selection.** **6 / 48** layers choose contribution (21, 23, 24, 29, 32, 45); 42 choose score — 87.5 %, meeting the pre-registered ≥ 75 %. The local errors are close (L24: score 0.3162 vs contribution 0.3156; L06: 0.294 vs 0.299), whereas OLMoE's favour contribution by ~5 % in every layer.
+
+**Sweeps.** `MixedPolicy` = the chosen signal per layer, per-layer τ for the target k′.
+
+| | OLMoE k′≈5 | OLMoE k′≈4 | Qwen3 k′=5 |
+|---|---:|---:|---:|
+| mixed ppl | 12.202 | 13.701 | 13.003 |
+| mixed vs score-only | **−3.0 % [−4.0, −2.0]** | **−7.0 % [−8.9, −5.2]** | +0.4 % [−0.5, +1.4] n.s. |
+| mixed vs contribution | +0.0 % [+0.0, +0.0] (identical) | +0.0 % (identical) | +0.1 % [−1.7, +1.9] n.s. |
+| mixed vs static top-k | −0.8 % [−1.8, +0.3] n.s. | **−2.9 % [−4.9, −1.0]** | **+2.9 % [+0.7, +5.0]** worse |
+
+**Reading.** The detector selects the right *signal* on both models from a few hundred calibration tokens and no perplexity: on OLMoE the mixed policy is bit-identical to contribution, on Qwen3 it is score-only within noise. That resolves the two-regime problem for the ranking signal. It does not resolve the other Qwen3 fact — every dynamic rule trails static top-k there — and the near-tied local errors suggest why: where neither signal orders experts much better than the other, per-token variation of k buys nothing and costs something. That is a second per-layer decision the same probe can make — dynamic vs static — and it is F31.
 
 ## Pending (running, in order)
+
+- **F31 — per-layer dynamic-vs-static selection.** Same probe: at the target mean k′, compare the layer error of a fixed per-layer count against per-token τ; choose per layer. Targets the remaining Qwen3 gap to static top-k. Queued behind E6/E7.
 
 - **F28 — downstream accuracy.** HellaSwag / ARC-Easy / PIQA, 200 examples each, continuation log-likelihood on the streaming engine, OLMoE at k′=5, five policies, paired per-example CIs.
 - **F29 — third model.** Qwen1.5-MoE-A2.7B (top-4 of 60, `norm_topk_prob=False`, always-on shared expert): engine validation against HF, calibration, sweep at k′ 3 and 2.5.
 
-- **F30 — sweep halves** (selection recorded in §14): OLMoE 8,192 tokens k′ 5/4, then Qwen3 4,096 tokens k′ 5.

@@ -1,0 +1,19 @@
+=== F30 signal selection, Qwen/Qwen3-30B-A3B, 1024 calibration tokens ===
+  layers choosing contribution: 6 / 48  -> [21, 23, 24, 29, 32, 45]
+  L00 rel.err drop-2: score 0.1502  contrib 0.1629  -> score
+  L06 rel.err drop-2: score 0.2942  contrib 0.2993  -> score
+  L12 rel.err drop-2: score 0.2891  contrib 0.2913  -> score
+  L18 rel.err drop-2: score 0.2823  contrib 0.2854  -> score
+  L24 rel.err drop-2: score 0.3162  contrib 0.3156  -> contrib
+  L30 rel.err drop-2: score 0.2857  contrib 0.2875  -> score
+  L36 rel.err drop-2: score 0.2704  contrib 0.2745  -> score
+  L42 rel.err drop-2: score 0.2071  contrib 0.2111  -> score
+  top8                       ppl=  11.879  k'=8.00
+  top5(static)               ppl=  12.642  k'=5.00
+  score_only@k'=5.0          ppl=  12.945  k'=5.00
+  contribution@k'=5.0        ppl=  12.987  k'=5.03
+  mixed@k'=5.0               ppl=  13.003  k'=5.00
+  mixed@k'=5.0 vs score_only@k'=5.0:  +0.4% [ -0.5,  +1.4] n.s.
+  mixed@k'=5.0 vs contribution@k'=5.0:  +0.1% [ -1.7,  +1.9] n.s.
+  mixed@k'=5.0 vs top5(static):  +2.9% [ +0.7,  +5.0] SIGNIFICANT (worse)
+F30 DONE

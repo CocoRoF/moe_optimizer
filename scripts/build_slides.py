@@ -171,7 +171,7 @@ bullets(s, ["Qwen3 예산 배분: layer_topk(static) vs uniform static −0.1 % 
             "contribution+budget은 contribution보다 **+2.6 % [+1.4, +4.0] 악화** — w·s 곡선으로 예산을 배분했기 때문. Qwen3에서 scale은 무정보가 아니라 *틀린* 신호",
             "→ 어느 신호를 믿을지는 모델 성질. calibration 토큰에서 층별로 두 규칙의 출력 오차를 직접 재서 선택 (F30)",
             "OLMoE: 16/16 층이 contribution 선택 (예: L00 0.142 vs 0.150) — perplexity 없이 F20의 판정을 재현",
-            "Qwen3 사전 등록: ≥75 % 층이 score 선택 → MixedPolicy가 두 체제에서 각각 더 나은 규칙을 자동 상속", "sweep 수치: (실행 중)"], size=14)
+            "Qwen3: **42/48 층이 score 선택** (87.5 %, 사전 등록 ≥75 % 충족) → mixed ≈ score-only (+0.4 % n.s.)", "OLMoE: mixed ≡ contribution (−3.0 %/−7.0 % vs score-only, −2.9 % vs static @k′≈4)", "남는 사실: Qwen3에서는 모든 동적 규칙이 static top-5에 짐 (+2.9 % [+0.7, +5.0]) — 층별 오차가 거의 동률인 곳에서는 토큰별 k 변동이 손해 → F31(동적 vs 정적 선택)"], size=14)
 # ---- 기여·한계·향후
 section("연구의 기여점 및 향후 연구 방향")
 s = title_only("기여")

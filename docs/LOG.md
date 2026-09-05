@@ -1274,3 +1274,7 @@ Counterfactual `StreamingQwen3MoE(renorm=False)`, 4,096 tokens, k′=5. The unmo
 ## F25b — Qwen3 with full-mass renormalisation (2026-09-03)
 
 `renorm="full"`: top-8 bit-identical (11.879); dropping = subtraction. contribution vs score-only +0.8 % [−0.9, +2.7]; vs static +3.1 % [+1.2, +5.1]. The renormalisation hypothesis is rejected; F25's −40 % was an artefact of the damaged model. Log closed.
+
+## F27, F30 (2026-09-04/05)
+
+F27: layer budgets help static on OLMoE (−2.8 % at k′≈4), combine with contribution into the best row; on Qwen3 budgets are neutral and any use of the scale hurts (+2.6 %). F30: calibration-only signal detector — OLMoE 16/16 contribution (mixed ≡ contribution), Qwen3 42/48 score (mixed ≈ score-only, pre-registered ≥75 % met). Session restarted mid-chain; F30 had completed, E6 was lost and relaunched with E7.

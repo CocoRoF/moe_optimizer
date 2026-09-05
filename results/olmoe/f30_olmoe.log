@@ -1,0 +1,26 @@
+=== F30 signal selection, allenai/OLMoE-1B-7B-0924, 1024 calibration tokens ===
+  layers choosing contribution: 16 / 16  -> [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+  L00 rel.err drop-2: score 0.1496  contrib 0.1420  -> contrib
+  L02 rel.err drop-2: score 0.1634  contrib 0.1621  -> contrib
+  L04 rel.err drop-2: score 0.2129  contrib 0.2062  -> contrib
+  L06 rel.err drop-2: score 0.2121  contrib 0.2061  -> contrib
+  L08 rel.err drop-2: score 0.2278  contrib 0.2210  -> contrib
+  L10 rel.err drop-2: score 0.1757  contrib 0.1720  -> contrib
+  L12 rel.err drop-2: score 0.1700  contrib 0.1602  -> contrib
+  L14 rel.err drop-2: score 0.1623  contrib 0.1529  -> contrib
+  top8                       ppl=  11.051  k'=8.00
+  top5(static)               ppl=  12.299  k'=5.00
+  score_only@k'=5.0          ppl=  12.579  k'=4.94
+  contribution@k'=5.0        ppl=  12.202  k'=4.96
+  mixed@k'=5.0               ppl=  12.202  k'=4.96
+  top4(static)               ppl=  14.117  k'=4.00
+  score_only@k'=4.0          ppl=  14.737  k'=3.94
+  contribution@k'=4.0        ppl=  13.701  k'=3.96
+  mixed@k'=4.0               ppl=  13.701  k'=3.96
+  mixed@k'=5.0 vs score_only@k'=5.0:  -3.0% [ -4.0,  -2.0] SIGNIFICANT (better)
+  mixed@k'=5.0 vs contribution@k'=5.0:  +0.0% [ +0.0,  +0.0] n.s.
+  mixed@k'=5.0 vs top5(static):  -0.8% [ -1.8,  +0.3] n.s.
+  mixed@k'=4.0 vs score_only@k'=4.0:  -7.0% [ -8.9,  -5.2] SIGNIFICANT (better)
+  mixed@k'=4.0 vs contribution@k'=4.0:  +0.0% [ +0.0,  +0.0] n.s.
+  mixed@k'=4.0 vs top4(static):  -2.9% [ -4.9,  -1.0] SIGNIFICANT (better)
+F30 DONE
