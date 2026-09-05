@@ -294,6 +294,30 @@ On 1,024 calibration tokens every routed expert is computed, and for each layer 
 
 **Reading.** The detector selects the right *signal* on both models from a few hundred calibration tokens and no perplexity: on OLMoE the mixed policy is bit-identical to contribution, on Qwen3 it is score-only within noise. That resolves the two-regime problem for the ranking signal. It does not resolve the other Qwen3 fact — every dynamic rule trails static top-k there — and the near-tied local errors suggest why: where neither signal orders experts much better than the other, per-token variation of k buys nothing and costs something. That is a second per-layer decision the same probe can make — dynamic vs static — and it is F31.
 
+## 15. Goal restated and a design gap (2026-09-05)
+
+The objective is *inference optimisation with the smallest possible accuracy loss* — some loss is accepted, but it is the loss that is to be minimised. Against that objective the experiments so far have a gap: they were run at aggressive budgets (k′≈5 and 4 — 37.5 % and 50 % fewer expert loads) and compare rules on *who loses less*. The low-loss region (k′≈7 and 6 — 12.5 % and 25 % fewer loads) has one 2,048-token perplexity point (F15: +3.8 % at k′≈6) and no downstream accuracy. The exact state of what has been measured is `scripts/report_pareto.py` (§16 below); the low-loss sweeps and downstream accuracy at k′=6 are queued (`runs/chain_lowloss.sh`).
+
+## 16. Exact loss-vs-savings table (what is measured, as of this date)
+
+OLMoE-1B-7B, 8,192 test tokens, paired 95 % CI vs top-8 (ppl 11.051). Downstream accuracy: **not yet measured** (E6 running; one adverse partial row from a lost run: ARC-Easy n=200, contribution 70.5 % vs score-only 75.0 % vs top-8 75.0 %, unpaired).
+
+| policy | loads −% | ppl | Δppl [95 % CI] |
+|---|---:|---:|---|
+| static top-5 | 37.5 % | 12.299 | +11.3 % [+9.5, +13.3] |
+| **contribution + layer budget** | 38.0 % | **12.190** | **+10.3 % [+8.6, +12.1]** |
+| contribution | 38.0 % | 12.202 | +10.4 % [+8.6, +12.3] |
+| score-only | 38.2 % | 12.579 | +13.8 % [+11.8, +15.9] |
+| static top-4 | 50.0 % | 14.117 | +27.7 % [+23.8, +32.0] |
+| **contribution + layer budget** | 50.5 % | **13.611** | **+23.2 % [+20.6, +25.7]** |
+| score-only | 50.8 % | 14.737 | +33.3 % [+28.9, +37.8] |
+
+Qwen3-30B-A3B, 4,096 tokens (ppl 11.879): best at 37.5 % fewer loads is **static** (layer_topk +6.2 % [+4.3, +8.4]; uniform +6.5 %); the best dynamic rule is +8.6–9.3 %.
+
+Batch-1 decode, OLMoE (F16): k′≈5 → 1.80× tok/s, bytes/token −29 %.
+
+**Honest reading against the objective.** At 38 % fewer expert loads the smallest perplexity loss achieved is +10.3 % — better than every training-free baseline measured here, but not small. Whether that is an acceptable loss is a downstream-accuracy question that is not yet answered, and the one partial accuracy row points the wrong way for the contribution rule. The operating points that a loss-minimising deployment would actually choose (k′≈6–7) are the ones now being measured.
+
 ## Pending (running, in order)
 
 - **F31 — per-layer dynamic-vs-static selection.** Same probe: at the target mean k′, compare the layer error of a fixed per-layer count against per-token τ; choose per layer. Targets the remaining Qwen3 gap to static top-k. Queued behind E6/E7.
