@@ -44,6 +44,6 @@ $PY scripts/validate_stream.py $Q15 6GiB
 $PY scripts/policy_calib.py $Q15 2048
 $PY scripts/policy_sweep.py $Q15 4096 3,2.5 && $PY scripts/paired_bootstrap.py runs/policy_sweep_qwen1.json
 echo "== 11. per-layer signal selection (F30)  ~1 h / ~2.5 h =="
-$PY scripts/signal_select.py $OLMOE 1024 8192 5,4
-$PY scripts/signal_select.py $QWEN  1024 4096 5
+$PY scripts/signal_select.py $OLMOE 1024 8192 5,4 --mode   # --mode adds the F31 dynamic-vs-static rows
+$PY scripts/signal_select.py $QWEN  1024 4096 5   --mode
 echo "done. Compare runs/*.json against results/."
