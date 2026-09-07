@@ -12,7 +12,11 @@
 2. *Skip by Contribution, Not by Score: Training-Free Dynamic Expert Selection in Fine-Grained MoE*
 3. (보수적) *Calibrated Output Scale as a Missing Signal in Training-Free MoE Expert Skipping*
 
-## 초록 초안 (영문) — F27/F30 이후 (논문의 새 척추: "어느 신호를 믿을지는 calibration이 고른다")
+## 초록 초안 (영문) — F28/F29/F32 이후 (정확도 결과 반영; 현재 방어 가능한 버전)
+
+> Training-free dynamic expert skipping executes fewer than the routed top-k experts per token, saving memory traffic in proportion to the experts skipped. We study it on three fine-grained MoE models under a strict matched-budget, paired-CI protocol. Three findings. (1) The router score carries model-dependent information about expert output magnitude — r = +0.17 (OLMoE-1B-7B), +0.45 (Qwen1.5-MoE-A2.7B), −0.05 (Qwen3-30B-A3B) — and ranking by score × a calibrated per-expert output scale helps exactly where the score lacks it: on OLMoE it lowers perplexity over the score-only rule by 0.5–7 % (growing with the cut) and over static top-k by 1.0 % [0.3, 1.7] at 25 % fewer loads and 2.9 % [1.1, 4.9] at 50 %; on Qwen1.5-MoE it is redundant; on Qwen3 no norm-based rule helps. (2) A calibration-only probe — the layer-output error under each rule on ~1,000 tokens — selects the right signal per layer on both regimes without a perplexity sweep (16/16 OLMoE layers → contribution; 42/48 Qwen3 layers → score). A training-free per-layer budget allocator is separable from the signal and is the dominant lever on the shared-expert model (layer-static −3.5 % [−4.7, −2.4] vs uniform static). (3) The perplexity frontier on OLMoE is +0.6 % at 12.8 % fewer loads, +3.3 % at 25 %, +10.3 % at 38 %; on the shared-expert model +1.1 % at 25 % of routed loads. **Downstream accuracy tells a more sober story: at n = 200 per task every rule loses ≈ 1 point at 25 % and ≈ 1–2 at 38 %, no rule is distinguishable from another, and the only significant comparisons are adverse for the contribution rule on ARC** — the perplexity differences are below what this sample resolves. We report the frontier, the detector, and the accuracy result with intervals, and identify the always-on shared expert as the architectural feature that makes skipping cheap.
+
+## 초록 초안 (영문) — F27/F30 이후 (기록용)
 
 > Training-free dynamic expert skipping decides which routed experts to execute from the router score alone. We show on three fine-grained MoE models that the score carries little information about an expert's output magnitude (r ≈ 0), and that ranking by score × a calibrated per-expert output scale is a large improvement on one router family and a degradation on another: on OLMoE-1B-7B it lowers matched-budget perplexity by 3.0 % [2.0, 4.0] and 7.0 % [5.3, 8.8] at k′≈5 and 4 and matches a per-token oracle, while on Qwen3-30B-A3B every use of the scale — for ranking, for layer budgets, or as an oracle — hurts. We resolve this with a calibration-only detector: on a few hundred tokens, each layer's output error under both drop rules is measured directly, and the lower-error signal is adopted per layer. The detector selects contribution in 16/16 OLMoE layers [Qwen3: pending] and the resulting mixed policy inherits the better rule on each model without knowing which model it is. A training-free layer-budget allocator is separable from the ranking signal and combines with it into the best configuration at both budgets on OLMoE (−0.9 % / −3.5 % vs static top-k, both significant). On a bandwidth-bound batch-1 decoder every skipped expert is bytes not read: 1.80× decode speed at k′≈5. [downstream accuracy: pending]
 
@@ -40,8 +44,9 @@
 | 5.6 Ablation | contribution vs score-only vs static; linear vs squared share (F23); renorm 오차모델 (F22); **proxy vs oracle (F24: OLMoE 동률 — proxy 충분)** | F15, F22, F23, F24 |
 | 5.7 Layer budgets | OLMoE: 예산+정렬 분리·결합, 최선 행 (−0.9 %/−3.5 % vs static, 유의). Qwen3: 예산 중립, scale 사용은 어디서든 악화 (+2.6 %) | F27 |
 | 5.7b Signal selection | calibration에서 층별 출력 오차로 신호 선택 → MixedPolicy. OLMoE 16/16 contribution; Qwen3 사전 등록 ≥75 % score | **F30(실행 중)** |
-| 5.8 Downstream | HellaSwag/ARC-Easy/PIQA loglikelihood 정확도, paired CI | **F28(대기)** |
-| 5.9 Third model | Qwen1.5-MoE-A2.7B (top-4/60, shared expert, unnormalised) | **F29(대기)** |
+| 5.8 Downstream | 4과제 × n=200 × 2예산: 모든 규칙 ≈ −1 pt, 규칙 간 구분 불가, contribution은 ARC에서 유의하게 불리 (−4.5 [−8.0, −1.5] ×2). n=1000 진행 중 | F28, **F28b(대기)** |
+| 5.9 Third model | Qwen1.5-MoE: +1.1 % @25 %, +1.6 % @37.5 % routed loads; layer-static 최선; r(s,gate)=+0.45 → 신호 불필요; shared expert가 손실을 낮춤. bytes 측정 대기 | F29, **F29b(대기)** |
+| 5.10 Low-loss frontier | OLMoE +0.6 % @12.8 %, +3.3 % @25 % (예산 25 %에서 도움, 12.5 %에서 해) | F32 |
 | 6 Limitations | 절대 비용(+9.8% @ 37.5% 절감), ZEDA 대비, 모델 2→3개, CPU fp32 무대 | 아래 |
 | 7 Conclusion | | |
 

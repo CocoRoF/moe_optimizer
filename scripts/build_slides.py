@@ -172,11 +172,27 @@ bullets(s, ["Qwen3 예산 배분: layer_topk(static) vs uniform static −0.1 % 
             "→ 어느 신호를 믿을지는 모델 성질. calibration 토큰에서 층별로 두 규칙의 출력 오차를 직접 재서 선택 (F30)",
             "OLMoE: 16/16 층이 contribution 선택 (예: L00 0.142 vs 0.150) — perplexity 없이 F20의 판정을 재현",
             "Qwen3: **42/48 층이 score 선택** (87.5 %, 사전 등록 ≥75 % 충족) → mixed ≈ score-only (+0.4 % n.s.)", "OLMoE: mixed ≡ contribution (−3.0 %/−7.0 % vs score-only, −2.9 % vs static @k′≈4)", "남는 사실: Qwen3에서는 모든 동적 규칙이 static top-5에 짐 (+2.9 % [+0.7, +5.0]) — 층별 오차가 거의 동률인 곳에서는 토큰별 k 변동이 손해 → F31(동적 vs 정적 선택)"], size=14)
+s = title_only("결과 9 — 정확도 (F28): perplexity 이득이 정확도로 보이지 않는다")
+table(s, [["k′=5 (38 % 절감), n=200", "top-8", "static", "score-only", "contribution", "contrib+budget"],
+          ["ARC-Easy", "75.0", "73.0 (−2.0)", "75.0 (0.0)", "70.5 (−4.5 [−8.0,−1.5])", "73.0 (−2.0)"],
+          ["ARC-Challenge", "48.0", "45.0 (−3.0)", "43.5 (−4.5 [−8.5,−0.5])", "44.5 (−3.5)", "44.0 (−4.0)"],
+          ["OpenBookQA", "36.0", "33.5 (−2.5)", "34.0 (−2.0)", "35.5 (−0.5)", "35.0 (−1.0)"],
+          ["HellaSwag", "45.5", "48.0 (+2.5)", "48.0 (+2.5)", "47.5 (+2.0)", "46.5 (+1.0)"],
+          ["mean Δ", "—", "−1.25", "−1.0", "−1.6", "−1.5"]], 0.4, 1.3, 12.5, col_w=[2.6, 1.2, 1.9, 2.2, 2.6, 2.0], size=11, bold_rows=(5,))
+bullets(s, ["k′=6 (25 % 절감)도 같은 그림: 모든 규칙 평균 ≈ −1 pt, 규칙 간 구분 불가(CI ±3–4 pt), contribution만 ARC-Challenge에서 −4.5 [−8.0, −1.5]",
+            "perplexity의 3–7 % 차이는 n=200 정확도가 분해할 수 있는 크기 아래 — 유일하게 유의한 두 비교는 contribution에 **불리**", "n=1,000 (top-8 / best / static / score-only, k′=6) 실행 중 — 논문의 첫 문장은 이 결과에 걸려 있다"], top=3.7, size=13)
+s = title_only("결과 10 — 저손실 경계와 세 번째 모델 (F32, F29)")
+bullets(s, ["OLMoE perplexity 경계 (최선 규칙): **+0.6 % @12.8 %** · **+3.3 % @25 %** · +10.3 % @38 % · +23 % @50 % 로드 절감",
+            "  25 %: contribution+budget이 static 대비 −1.0 % [−1.7, −0.3], score-only 대비 −1.6 %  ·  12.5 %: contribution 단독 최선, 예산은 오히려 해(+0.8 %)",
+            "Qwen1.5-MoE-A2.7B (top-4/60 + 상시 shared expert): **+1.1 % @25 %**, +1.6 % @37.5 % routed 절감 — 세 모델 중 최저 손실",
+            "  이유: shared expert가 각 층 기능의 큰 부분을 항상 수행 → routed expert 하나하나의 부담이 작음. 단 shared expert 바이트는 항상 읽힘 → routed 37.5 % ≈ MoE 바이트 ~19 %",
+            "  r(s, gate) = +0.45 (OLMoE +0.17, Qwen3 −0.05): router가 이미 크기를 담고 있어 contribution 신호는 불필요(동률), 층별 예산이 지배 (layer-static −3.5 % [−4.7, −2.4] vs static)",
+            "손실 최소화 관점의 결론: 25 % 절감에서 ppl +1–3 %, 정확도 ≈ −1 pt(±3) — 어느 규칙이든. 규칙 간 차이는 ppl에서만 확정, 정확도에서는 미확정"], size=13)
 # ---- 기여·한계·향후
 section("연구의 기여점 및 향후 연구 방향")
 s = title_only("기여")
 bullets(s, ["측정: router score는 expert 출력 크기를 담지 않는다 — 두 fine-grained MoE에서 r ≈ 0, Qwen3는 층의 1/3에서 음", "방법: 층당 E floats의 calibrated scale로 정렬 — 학습 없음, router 보존",
-            "결과(OLMoE): score-only 대비 −3.0 % / −7.0 % (CI 0 제외), 정적 top-k 대비 k′≈4에서 −2.9 %, oracle과 동률, tail 저하 ≤ 평균, 디코드 1.80×",
+            "결과(OLMoE, ppl): score-only 대비 −3.0 % / −7.0 % (CI 0 제외), 정적 top-k 대비 −1.0 % @25 %·−2.9 % @50 %, oracle과 동률, 디코드 1.80×", "**정확도(n=200): 모든 규칙 ≈ −1 pt, 규칙 간 구분 불가; 유의한 두 비교는 contribution에 불리** — ppl 이득은 아직 정확도로 입증되지 않음",
             "경계: Qwen3에서는 어떤 norm 기반 규칙도(proxy·oracle·renorm 중립화) score를 못 이김 — 경계는 측정됨, 기제는 미해명 (가설 3개 기각)", "부정 결과 명시: 발표된 중앙값 규칙은 두 모델 모두 붕괴; 제가 유도한 원리적 변형 둘은 휴리스틱보다 열등",
             "재현: CPU 전용, 모델 revision·데이터·seed·환경 고정, results/에 원자료, reproduce.sh 한 줄"], size=15)
 s = title_only("한계와 향후 연구")
