@@ -335,7 +335,8 @@ OLMoE, 200 examples per task, continuation log-likelihood, paired bootstrap on p
 | ARC-Challenge | 48.0 | 45.0 (−3.0 [−7.5, +1.5]) | 43.5 (−4.5 [−8.5, −0.5]) | 44.5 (−3.5 [−7.5, +0.5]) | 44.0 (−4.0 [−8.0, +0.0]) |
 | OpenBookQA | 36.0 | 33.5 (−2.5 [−6.5, +1.5]) | 34.0 (−2.0 [−6.0, +2.0]) | 35.5 (−0.5 [−4.5, +3.5]) | 35.0 (−1.0 [−4.0, +2.0]) |
 | HellaSwag | 45.5 | 48.0 (+2.5 [+0.0, +5.0]) | 48.0 (+2.5 [−0.5, +5.5]) | 47.5 (+2.0 [−0.5, +5.0]) | 46.5 (+1.0 [−2.0, +4.0]) |
-| mean Δ | — | −1.25 | −1.0 | −1.6 | −1.5 |
+| mean Δ, 4 tasks | — | −1.25 | −1.0 | −1.6 | −1.5 |
+| **mean Δ, ARC-E/ARC-C/OBQA** (HellaSwag excluded, see below) | — | **−2.5** | **−2.2** | **−2.8** | **−2.3** |
 
 **k′ = 6 (25 % fewer expert loads)**
 
@@ -345,11 +346,12 @@ OLMoE, 200 examples per task, continuation log-likelihood, paired bootstrap on p
 | ARC-Challenge | 48.0 | 45.5 (−2.5) | 46.0 (−2.0) | **43.5 (−4.5 [−8.0, −1.5])** | 44.5 (−3.5 [−7.0, +0.0]) |
 | OpenBookQA | 36.0 | 33.5 (−2.5) | 35.5 (−0.5) | 35.5 (−0.5) | 35.5 (−0.5) |
 | HellaSwag | 45.5 | 46.5 (+1.0) | 46.0 (+0.5) | 47.5 (+2.0) | 46.0 (+0.5) |
-| mean Δ | — | −1.25 | −0.75 | −1.1 | −1.25 |
+| mean Δ, 4 tasks | — | −1.25 | −0.75 | −1.1 | −1.25 |
+| **mean Δ, ARC-E/ARC-C/OBQA** (HellaSwag excluded) | — | **−2.0** | **−1.2** | **−2.2** | **−1.8** |
 
 **Reading, exactly.** Per-task intervals at n = 200 are ±3–4 points wide. Every rule loses about one point on average at both budgets, and no rule is distinguishable from any other on accuracy. The only comparisons that reach significance are **adverse for the contribution rule**: −4.5 [−8.0, −1.5] on ARC-Easy at k′ = 5 and −4.5 [−8.0, −1.5] on ARC-Challenge at k′ = 6 (two of 16 per-budget comparisons; ~1 false positive is expected at α = 0.05, so this is suggestive, not established). The 3 % / 7 % perplexity advantage of contribution over score-only (F20) is real but is **below what n = 200 accuracy can resolve** and does not appear here. The layer-budget combination shows no accuracy signal either way. HellaSwag improves under every skipping rule (+0.5 to +2.5), which is most likely noise at this n — and **the HellaSwag column itself is not comparable to published numbers**: the loader omitted the activity-label prefix and capitalisation of the standard protocol and the scorer reported raw summed log-likelihood where the headline metric is byte-length-normalised (`acc_norm`); a 45.5 % top-8 baseline is far below the ≈ 0.8 `acc_norm` reported for this model. Fixed (2026-09-06) and queued for rerun; ARC and OpenBookQA raw `acc` are unaffected by the preprocessing issue.
 
-**What this means for the objective.** With the loss to be minimised measured in accuracy: 25 % fewer expert loads costs ≈ 1 point (±3) with any of these rules; 38 % costs ≈ 1–2 points. The ranking-signal differences the perplexity experiments established are not yet visible in accuracy at this sample size, and for the contribution rule specifically the accuracy evidence leans the wrong way. Resolving a 1–2 point difference needs n ≈ 1,000 per task; that run is queued for the two rules that matter (best-perplexity rule and static top-6) at k′ = 6.
+**What this means for the objective.** With the loss to be minimised measured in accuracy on the three tasks whose scoring is standard: 25 % fewer expert loads costs ≈ 1–2 points (±3) with any of these rules; 38 % costs ≈ 2–3 points. The ranking-signal differences the perplexity experiments established are not yet visible in accuracy at this sample size, and for the contribution rule specifically the accuracy evidence leans the wrong way. Resolving a 1–2 point difference needs n ≈ 1,000 per task; that run is queued for the two rules that matter (best-perplexity rule and static top-6) at k′ = 6.
 
 ---
 
