@@ -1,0 +1,17 @@
+  top8                   ppl=  11.051  k'=8.00    25.8 MB/tok  87.85 tok/s
+  mass_ratio(median)     ppl=  45.213  k'=3.20    24.7 MB/tok  145.49 tok/s
+  top7(static)           ppl=  11.167  k'=7.00    25.6 MB/tok  114.43 tok/s
+  score_only@k'=7.0      ppl=  11.166  k'=6.98    25.6 MB/tok  114.98 tok/s
+  contribution@k'=7.0    ppl=  11.114  k'=6.98    25.4 MB/tok  114.19 tok/s
+  contribution_sq@k'=7.0 ppl=  11.147  k'=6.94    25.3 MB/tok  115.23 tok/s
+  layer_topk(static)@k'=7.0 ppl=  11.156  k'=7.00    25.6 MB/tok  114.75 tok/s
+  score_only+layerbudget@k'=7.0 ppl=  11.167  k'=6.98    25.6 MB/tok  114.48 tok/s
+  contribution+layerbudget@k'=7.0 ppl=  11.201  k'=6.99    25.4 MB/tok  113.91 tok/s
+  top6(static)           ppl=  11.529  k'=6.00    25.3 MB/tok  120.24 tok/s
+  score_only@k'=6.0      ppl=  11.623  k'=5.95    25.2 MB/tok  122.14 tok/s
+  contribution@k'=6.0    ppl=  11.493  k'=5.97    24.9 MB/tok  123.75 tok/s
+  contribution_sq@k'=6.0 ppl=  11.547  k'=5.92    24.8 MB/tok  123.17 tok/s
+  layer_topk(static)@k'=6.0 ppl=  11.491  k'=6.00    25.3 MB/tok  121.81 tok/s
+  score_only+layerbudget@k'=6.0 ppl=  11.591  k'=5.97    25.3 MB/tok  121.36 tok/s
+  contribution+layerbudget@k'=6.0 ppl=  11.411  k'=5.98    24.9 MB/tok  123.18 tok/s
+DONE

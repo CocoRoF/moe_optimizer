@@ -1,0 +1,9 @@
+=== F31: per-layer dynamic-vs-static at the first target ===
+Traceback (most recent call last):
+  File "/home/workspace_copy/moe_optimizer/scripts/signal_select.py", line 31, in <module>
+    eng = Eng(store, rm.config); modes = mode_selection_pass(eng, cal_ids, sc, use, TARGETS[0]); del eng; gc.collect()
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/workspace_copy/moe_optimizer/src/moe_optimizer/runtime/stream.py", line 584, in mode_selection_pass
+    x, probs, idx, w, ys, h_attn = engine._layer_probe(l, h, cos, sin, cache)
+                                   ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'StreamingQwen15MoE' object has no attribute '_layer_probe'

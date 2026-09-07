@@ -1,0 +1,49 @@
+  arc_easy   top8                           acc= 75.0%  (n=200)
+  arc_easy   top5(static)                   acc= 73.0%  (n=200)
+  arc_easy   score_only@5.0                 acc= 75.0%  (n=200)
+  arc_easy   contribution@5.0               acc= 70.5%  (n=200)
+  arc_easy   contribution+layerbudget@5.0   acc= 73.0%  (n=200)
+  arc_easy   top5(static)                   vs top-8:  -2.0 pts [ -5.5,  +1.5]
+  arc_easy   score_only@5.0                 vs top-8:  +0.0 pts [ -3.0,  +3.0]
+  arc_easy   contribution@5.0               vs top-8:  -4.5 pts [ -8.0,  -1.5]
+  arc_easy   contribution+layerbudget@5.0   vs top-8:  -2.0 pts [ -5.0,  +1.0]
+  arc_easy   contribution@5.0 vs score_only@5.0:  -4.5 pts [ -8.0,  -1.5]
+  arc_easy   contribution+layerbudget@5.0 vs contribution@5.0:  +2.5 pts [ +0.0,  +5.0]
+  arc_easy   contribution+layerbudget@5.0 vs top5(static):  +0.0 pts [ -3.0,  +3.0]
+  arc_challenge top8                           acc= 48.0%  (n=200)
+  arc_challenge top5(static)                   acc= 45.0%  (n=200)
+  arc_challenge score_only@5.0                 acc= 43.5%  (n=200)
+  arc_challenge contribution@5.0               acc= 44.5%  (n=200)
+  arc_challenge contribution+layerbudget@5.0   acc= 44.0%  (n=200)
+  arc_challenge top5(static)                   vs top-8:  -3.0 pts [ -7.5,  +1.5]
+  arc_challenge score_only@5.0                 vs top-8:  -4.5 pts [ -8.5,  -0.5]
+  arc_challenge contribution@5.0               vs top-8:  -3.5 pts [ -7.5,  +0.5]
+  arc_challenge contribution+layerbudget@5.0   vs top-8:  -4.0 pts [ -8.0,  +0.0]
+  arc_challenge contribution@5.0 vs score_only@5.0:  +1.0 pts [ -2.5,  +4.5]
+  arc_challenge contribution+layerbudget@5.0 vs contribution@5.0:  -0.5 pts [ -3.5,  +2.5]
+  arc_challenge contribution+layerbudget@5.0 vs top5(static):  -1.0 pts [ -5.0,  +3.0]
+  openbookqa top8                           acc= 36.0%  (n=200)
+  openbookqa top5(static)                   acc= 33.5%  (n=200)
+  openbookqa score_only@5.0                 acc= 34.0%  (n=200)
+  openbookqa contribution@5.0               acc= 35.5%  (n=200)
+  openbookqa contribution+layerbudget@5.0   acc= 35.0%  (n=200)
+  openbookqa top5(static)                   vs top-8:  -2.5 pts [ -6.5,  +1.5]
+  openbookqa score_only@5.0                 vs top-8:  -2.0 pts [ -6.0,  +2.0]
+  openbookqa contribution@5.0               vs top-8:  -0.5 pts [ -4.5,  +3.5]
+  openbookqa contribution+layerbudget@5.0   vs top-8:  -1.0 pts [ -4.0,  +2.0]
+  openbookqa contribution@5.0 vs score_only@5.0:  +1.5 pts [ -2.0,  +5.5]
+  openbookqa contribution+layerbudget@5.0 vs contribution@5.0:  -0.5 pts [ -3.5,  +3.0]
+  openbookqa contribution+layerbudget@5.0 vs top5(static):  +1.5 pts [ -2.0,  +5.5]
+  hellaswag  top8                           acc= 45.5%  (n=200)
+  hellaswag  top5(static)                   acc= 48.0%  (n=200)
+  hellaswag  score_only@5.0                 acc= 48.0%  (n=200)
+  hellaswag  contribution@5.0               acc= 47.5%  (n=200)
+  hellaswag  contribution+layerbudget@5.0   acc= 46.5%  (n=200)
+  hellaswag  top5(static)                   vs top-8:  +2.5 pts [ +0.0,  +5.0]
+  hellaswag  score_only@5.0                 vs top-8:  +2.5 pts [ -0.5,  +5.5]
+  hellaswag  contribution@5.0               vs top-8:  +2.0 pts [ -0.5,  +5.0]
+  hellaswag  contribution+layerbudget@5.0   vs top-8:  +1.0 pts [ -2.0,  +4.0]
+  hellaswag  contribution@5.0 vs score_only@5.0:  -0.5 pts [ -3.0,  +2.0]
+  hellaswag  contribution+layerbudget@5.0 vs contribution@5.0:  -1.0 pts [ -3.5,  +1.5]
+  hellaswag  contribution+layerbudget@5.0 vs top5(static):  -1.5 pts [ -4.5,  +1.5]
+DONE

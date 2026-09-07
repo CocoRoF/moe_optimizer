@@ -6,19 +6,17 @@ Every routed expert that is *not* executed is three weight matrices not read fro
 
 📄 **Results with hyperparameters:** [`docs/FINDINGS.md`](docs/FINDINGS.md) · 🧪 **Raw outputs:** [`results/`](results/) · 🔁 **Reproduce:** `scripts/reproduce.sh` · 🖥 **Environment:** [`results/ENV.md`](results/ENV.md) · 📓 **Lab log (incl. the compression-era negatives):** [`docs/LOG.md`](docs/LOG.md) · 📚 **Literature survey (24 papers, verified):** [`docs/SURVEY.md`](docs/SURVEY.md) · ✍️ **Paper outline:** [`docs/PAPER_OUTLINE.md`](docs/PAPER_OUTLINE.md) · 📊 **Slides:** [`docs/slides/`](docs/slides/)
 
-## Headline table — OLMoE-1B-7B, 8,192 test tokens, matched mean k′
+## What is measured (OLMoE-1B-7B; exact numbers, paired 95 % CIs)
 
-| policy | k′≈5: Δppl vs top-8 | k′≈4: Δppl vs top-8 |
-|---|---:|---:|
-| static top-k | +11.3 % | +27.7 % |
-| score-only dynamic (Lu et al. 2024 / arXiv:2512.21911 family, fair k′) | +13.8 % | +33.4 % |
-| **contribution-calibrated dynamic (this work)** | **+10.4 %** | **+24.0 %** |
-| published median-threshold rule (arXiv:2512.21911) | +309 % (k′ 3.2) | — |
-| oracle (true per-token contribution; not deployable) | +9.9 % (k′ 4.6) | — |
+**Perplexity frontier** (8,192 test tokens, best rule at each budget): **+0.6 %** at 12.8 % fewer expert loads · **+3.3 %** at 25 % · **+10.3 %** at 38 % · **+23 %** at 50 %. The contribution-ranking signal beats the score-only rule at every budget (−0.5 % → −7 %, growing with the cut) and static top-k at 25 %+ (−1.0 % [−1.7, −0.3] at 25 %; −2.9 % [−4.9, −1.1] at 50 %). The published median-threshold rule collapses the model (+309 %).
 
-Paired bootstrap, 16 sequences: contribution vs score-only **−3.0 % [−4.0, −2.0]** (k′≈5), **−7.0 % [−8.8, −5.3]** (k′≈4); vs static **−2.9 % [−4.9, −1.1]** at k′≈4. Batch-1 decode at k′≈5: **1.80×** tok/s, bytes/token linear in k′. Math and code degrade *less* than general text.
+**Downstream accuracy** (ARC-Easy, ARC-Challenge, OpenBookQA, HellaSwag; n = 200 each): every rule loses **≈ 1 point** on average at 25 % and ≈ 1–2 at 38 % fewer loads; per-task intervals are ±3–4 points and **no rule is distinguishable from another**. The two comparisons that reach significance are adverse for the contribution rule (ARC, −4.5 [−8.0, −1.5] at each budget). The perplexity advantages above are below what this sample size resolves; n = 1,000 is queued.
 
-**Which signal to trust is decided by calibration (F30):** on ~1,000 tokens each layer's output error under both drop rules is measured directly and the better rule adopted per layer — 16/16 OLMoE layers pick contribution (the mixed policy is identical to it), 42/48 Qwen3 layers pick score (the mixed policy matches score-only). **Qwen3-30B-A3B** otherwise: contribution ties score-only, the oracle is *worse* than score-only, neutralising renormalisation changes nothing (F25b), and every dynamic rule trails static top-k there (+2.9 % [+0.7, +5.0]). See FINDINGS §6–7, §12, §14.
+**Batch-1 decode** (CPU, bytes counted): 1.80× tok/s at 38 % fewer loads; bytes/token linear in loads.
+
+**Other models.** Qwen1.5-MoE-A2.7B (shared expert): **+1.1 % ppl at 25 %** and +1.6 % at 37.5 % fewer *routed* loads — the lowest loss of the three, because the always-on shared expert carries much of each layer; the ranking signal is irrelevant there and per-layer budgets dominate. Qwen3-30B-A3B: static top-k wins (+6.2 % at 37.5 %); no norm-based signal helps, and calibration alone detects this (F30: 42/48 layers choose score).
+
+Full tables, hyperparameters and CIs: [`docs/FINDINGS.md`](docs/FINDINGS.md) §16–19; regenerate with `scripts/report_pareto.py`.
 
 ## Install and run
 

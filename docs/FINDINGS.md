@@ -318,9 +318,83 @@ Batch-1 decode, OLMoE (F16): k′≈5 → 1.80× tok/s, bytes/token −29 %.
 
 **Honest reading against the objective.** At 38 % fewer expert loads the smallest perplexity loss achieved is +10.3 % — better than every training-free baseline measured here, but not small. Whether that is an acceptable loss is a downstream-accuracy question that is not yet answered, and the one partial accuracy row points the wrong way for the contribution rule. The operating points that a loss-minimising deployment would actually choose (k′≈6–7) are the ones now being measured.
 
+## 17. Downstream accuracy (F28) — the perplexity gains do not show up as accuracy at n = 200
+
+```bash
+python3 scripts/policy_downstream.py allenai/OLMoE-1B-7B-0924 200 5.0 arc_easy,arc_challenge,openbookqa,hellaswag
+python3 scripts/policy_downstream.py allenai/OLMoE-1B-7B-0924 200 6.0 arc_easy,arc_challenge,openbookqa,hellaswag
+```
+
+OLMoE, 200 examples per task, continuation log-likelihood, paired bootstrap on per-example correctness vs top-8. Accuracy in %, Δ in points.
+
+**k′ = 5 (38 % fewer expert loads)**
+
+| task | top-8 | static top-5 | score-only | contribution | contribution+budget |
+|---|---:|---:|---:|---:|---:|
+| ARC-Easy | 75.0 | 73.0 (−2.0 [−5.5, +1.5]) | 75.0 (+0.0 [−3.0, +3.0]) | **70.5 (−4.5 [−8.0, −1.5])** | 73.0 (−2.0 [−5.0, +1.0]) |
+| ARC-Challenge | 48.0 | 45.0 (−3.0 [−7.5, +1.5]) | 43.5 (−4.5 [−8.5, −0.5]) | 44.5 (−3.5 [−7.5, +0.5]) | 44.0 (−4.0 [−8.0, +0.0]) |
+| OpenBookQA | 36.0 | 33.5 (−2.5 [−6.5, +1.5]) | 34.0 (−2.0 [−6.0, +2.0]) | 35.5 (−0.5 [−4.5, +3.5]) | 35.0 (−1.0 [−4.0, +2.0]) |
+| HellaSwag | 45.5 | 48.0 (+2.5 [+0.0, +5.0]) | 48.0 (+2.5 [−0.5, +5.5]) | 47.5 (+2.0 [−0.5, +5.0]) | 46.5 (+1.0 [−2.0, +4.0]) |
+| mean Δ | — | −1.25 | −1.0 | −1.6 | −1.5 |
+
+**k′ = 6 (25 % fewer expert loads)**
+
+| task | top-8 | static top-6 | score-only | contribution | contribution+budget |
+|---|---:|---:|---:|---:|---:|
+| ARC-Easy | 75.0 | 74.0 (−1.0) | 74.0 (−1.0) | 73.5 (−1.5) | 73.5 (−1.5) |
+| ARC-Challenge | 48.0 | 45.5 (−2.5) | 46.0 (−2.0) | **43.5 (−4.5 [−8.0, −1.5])** | 44.5 (−3.5 [−7.0, +0.0]) |
+| OpenBookQA | 36.0 | 33.5 (−2.5) | 35.5 (−0.5) | 35.5 (−0.5) | 35.5 (−0.5) |
+| HellaSwag | 45.5 | 46.5 (+1.0) | 46.0 (+0.5) | 47.5 (+2.0) | 46.0 (+0.5) |
+| mean Δ | — | −1.25 | −0.75 | −1.1 | −1.25 |
+
+**Reading, exactly.** Per-task intervals at n = 200 are ±3–4 points wide. Every rule loses about one point on average at both budgets, and no rule is distinguishable from any other on accuracy. The only comparisons that reach significance are **adverse for the contribution rule**: −4.5 [−8.0, −1.5] on ARC-Easy at k′ = 5 and −4.5 [−8.0, −1.5] on ARC-Challenge at k′ = 6 (two of 16 per-budget comparisons; ~1 false positive is expected at α = 0.05, so this is suggestive, not established). The 3 % / 7 % perplexity advantage of contribution over score-only (F20) is real but is **below what n = 200 accuracy can resolve** and does not appear here. The layer-budget combination shows no accuracy signal either way. HellaSwag improves under every skipping rule (+0.5 to +2.5), which is most likely noise at this n.
+
+**What this means for the objective.** With the loss to be minimised measured in accuracy: 25 % fewer expert loads costs ≈ 1 point (±3) with any of these rules; 38 % costs ≈ 1–2 points. The ranking-signal differences the perplexity experiments established are not yet visible in accuracy at this sample size, and for the contribution rule specifically the accuracy evidence leans the wrong way. Resolving a 1–2 point difference needs n ≈ 1,000 per task; that run is queued for the two rules that matter (best-perplexity rule and static top-6) at k′ = 6.
+
+---
+
+## 18. Low-loss operating points (F32) — OLMoE k′ 7 and 6, 8,192 tokens
+
+| policy | k′ | loads −% | ppl | Δppl [95 % CI] |
+|---|---:|---:|---:|---|
+| top-8 | 8.00 | 0 | 11.051 | — |
+| **contribution** | 6.98 | 12.8 % | **11.114** | **+0.6 %** (vs score-only −0.5 % [−1.0, +0.0]; vs static −0.5 % [−1.0, +0.0]) |
+| static top-7 | 7.00 | 12.5 % | 11.167 | +1.0 % |
+| contribution + budget | 6.99 | 12.6 % | 11.201 | +1.4 % (worse than contribution +0.8 % [+0.3, +1.2]) |
+| **contribution + budget** | 5.98 | 25.3 % | **11.411** | **+3.3 %** (vs static −1.0 % [−1.7, −0.3]; vs layer-static −0.7 % [−1.3, −0.1]; vs contribution −0.7 % [−1.4, −0.1]) |
+| layer_topk (static) | 6.00 | 25.0 % | 11.491 | +4.0 % |
+| contribution | 5.97 | 25.4 % | 11.493 | +4.0 % (vs score-only −1.1 % [−1.8, −0.5]) |
+| static top-6 | 6.00 | 25.0 % | 11.529 | +4.3 % |
+| score-only | 5.95 | 25.6 % | 11.623 | +5.2 % |
+
+The perplexity Pareto frontier on OLMoE is therefore: **+0.6 % at 12.8 % fewer loads, +3.3 % at 25 %, +10.3 % at 38 %, +23 % at 50 %** (best rule at each point). Budgets help at 25 % and hurt at 12.5 %; the contribution signal helps at every point, by 0.5–7 % over score-only, growing with the cut.
+
+---
+
+## 19. Third model (F29) — Qwen1.5-MoE-A2.7B: a low-loss regime, and why
+
+Top-4 of 60 routed experts plus an always-on shared expert (d_ff 5632, sigmoid-gated); `norm_topk_prob=False`. Engine validated against HF (`results/qwen15/validate_qwen15.log`). 4,096 test tokens; calibration 2,048.
+
+| policy | k′ | routed loads −% | ppl | Δ vs top-4 (9.628) |
+|---|---:|---:|---:|---:|
+| static top-3 | 3.00 | 25 % | **9.731** | **+1.1 %** |
+| contribution | 2.98 | 25.5 % | 9.751 | +1.3 % |
+| score-only | 2.97 | 25.8 % | 9.771 | +1.5 % |
+| **layer_topk (static)** | 2.50 | 37.5 % | **9.786** | **+1.6 %** |
+| contribution + budget | 2.49 | 37.8 % | 9.862 | +2.4 % |
+| contribution | 2.47 | 38.3 % | 9.913 | +3.0 % |
+| score-only | 2.45 | 38.8 % | 9.947 | +3.3 % |
+| static top-2 | 2.00 | 50 % | 10.139 | +5.3 % |
+
+Paired bootstrap (8 sequences): layer-static vs uniform static **−3.5 % [−4.7, −2.4]**; contribution vs static −2.2 % [−3.4, −0.9]; contribution vs score-only −0.3 % [−1.5, +0.8] n.s.; contribution+budget vs layer-static +0.8 % n.s.
+
+This is the smallest loss per skipped expert of the three models — a quarter of OLMoE's at the same fraction — and the reason is architectural: the shared expert carries a large, always-executed part of each layer's function, so the routed experts are individually less load-bearing. Two consequences the paper must state: (1) on this model the ranking signal barely matters (contribution ≈ score, n.s.) while **per-layer budgets matter a lot** (layer-static is the best rule at 37.5 %); (2) *routed-load* reduction overstates *byte* reduction here, because the shared expert (3 × 5632 × 2048) is read for every token regardless — at top-4 it is roughly half the MoE bytes, so 37.5 % fewer routed loads is ≈ 19 % fewer MoE bytes. The batch-1 decode measurement that reports bytes honestly is queued.
+
 ## Pending (running, in order)
 
-- **F31 — per-layer dynamic-vs-static selection.** Same probe: at the target mean k′, compare the layer error of a fixed per-layer count against per-token τ; choose per layer. Targets the remaining Qwen3 gap to static top-k. Queued behind E6/E7.
+- **F31 — per-layer dynamic-vs-static selection.** Crashed on a missing engine method (`_layer_probe`); being rewritten on the probe mechanism `signal_selection_pass` uses. Also pending on the third model.
+- **F28b — accuracy at n = 1,000** for top-8 / best rule / static top-6 at k′ = 6, to resolve ≈1-point differences.
+- **F29b — Qwen1.5-MoE batch-1 decode bytes** (shared expert included).
 
 - **F28 — downstream accuracy.** HellaSwag / ARC-Easy / PIQA, 200 examples each, continuation log-likelihood on the streaming engine, OLMoE at k′=5, five policies, paired per-example CIs.
 - **F29 — third model.** Qwen1.5-MoE-A2.7B (top-4 of 60, `norm_topk_prob=False`, always-on shared expert): engine validation against HF, calibration, sweep at k′ 3 and 2.5.
