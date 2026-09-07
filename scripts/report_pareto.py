@@ -25,7 +25,8 @@ dec = {d["policy"].replace("@", "@k'="): d for d in json.load(open(dec_path))} i
 dec_base = dec.get("top8")
 tasks = sorted({t for v in ds.values() for t in v}) if ds else []
 print(f"# {SHORT}: source {files[0]} ({n_tok:,} test tokens, {len(base['per_seq_nll'])} seqs){'; downstream ' + ds_path if ds_path else '; downstream: NOT MEASURED'}")
-hdr = f"{'policy':<34} {'k′':>5} {'loads −%':>9} {'decode MB/tok':>14} {'decode tok/s':>13} {'ppl':>8} {'Δppl% [95% CI]':>24}" + "".join(f" {'Δ'+t+' pts [CI]':>26}" for t in tasks)
+NORM = any("hits_norm" in ds.get(p, {}).get(t, {}) for p in ds for t in ds[p]) if ds else False
+hdr = f"{'policy':<34} {'k′':>5} {'loads −%':>9} {'decode MB/tok':>14} {'decode tok/s':>13} {'ppl':>8} {'Δppl% [95% CI]':>24}" + "".join(f" {'Δ'+t+(' norm' if NORM else '')+' pts [CI]':>26}" for t in tasks)
 print(hdr); print("-" * len(hdr))
 for r in sorted(rows, key=lambda r: -r["mean_k"]):
     lo, md, hi = ci_ratio(r["per_seq_nll"], base["per_seq_nll"]) if r["policy"] != "top8" else (0, 0, 0)
@@ -35,7 +36,8 @@ for r in sorted(rows, key=lambda r: -r["mean_k"]):
     line = f"{r['policy']:<34} {r['mean_k']:>5.2f} {loads:>8.1f}% {dmb} {dts} {r['ppl']:>8.3f} {md*100:>+7.1f}% [{lo*100:+.1f},{hi*100:+.1f}]"
     for t in tasks:
         name = r["policy"].replace("@k'=", "@")
-        a = ds.get(name, {}).get(t, {}).get("hits"); b = ds.get("top8", {}).get(t, {}).get("hits")
+        key = "hits_norm" if NORM else "hits"
+        a = ds.get(name, {}).get(t, {}).get(key); b = ds.get("top8", {}).get(t, {}).get(key)
         if a and b and r["policy"] != "top8":
             l2, m2, h2 = ci_diff(a, b); line += f" {m2*100:>+7.1f} [{l2*100:+.1f},{h2*100:+.1f}]"
         elif r["policy"] == "top8" and b: line += f" {'acc %.1f%%' % (100*sum(b)/len(b)):>26}"

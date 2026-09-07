@@ -10,7 +10,7 @@ Every routed expert that is *not* executed is three weight matrices not read fro
 
 **Perplexity frontier** (8,192 test tokens, best rule at each budget): **+0.6 %** at 12.8 % fewer expert loads · **+3.3 %** at 25 % · **+10.3 %** at 38 % · **+23 %** at 50 %. The contribution-ranking signal beats the score-only rule at every budget (−0.5 % → −7 %, growing with the cut) and static top-k at 25 %+ (−1.0 % [−1.7, −0.3] at 25 %; −2.9 % [−4.9, −1.1] at 50 %). The published median-threshold rule collapses the model (+309 %).
 
-**Downstream accuracy** (ARC-Easy, ARC-Challenge, OpenBookQA, HellaSwag; n = 200 each): every rule loses **≈ 1 point** on average at 25 % and ≈ 1–2 at 38 % fewer loads; per-task intervals are ±3–4 points and **no rule is distinguishable from another**. The two comparisons that reach significance are adverse for the contribution rule (ARC, −4.5 [−8.0, −1.5] at each budget). The perplexity advantages above are below what this sample size resolves; n = 1,000 is queued.
+**Downstream accuracy** (ARC-Easy, ARC-Challenge, OpenBookQA; n = 200 each, raw `acc`): every rule loses **≈ 1 point** on average at 25 % and ≈ 1–2 at 38 % fewer loads; per-task intervals are ±3–4 points and **no rule is distinguishable from another**. The two comparisons that reach significance are adverse for the contribution rule (ARC, −4.5 [−8.0, −1.5] at each budget). The perplexity advantages above are below what this sample size resolves; n = 1,000 with `acc_norm` is running. The first HellaSwag pass used a non-standard preprocessing and raw scoring and is excluded until its rerun lands.
 
 **Batch-1 decode** (CPU, bytes counted): 1.80× tok/s at 38 % fewer loads; bytes/token linear in loads.
 
