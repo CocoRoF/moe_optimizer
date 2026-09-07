@@ -2,6 +2,7 @@
 Multiple-choice tasks need no generation: score = sum of continuation-token
 log-probs given the context; predict argmax.  CPU-feasible at a few hundred
 examples per task.  Reports accuracy per policy at one target k'."""
+import re
 import sys, json, gc, math, torch, torch.nn.functional as F
 sys.path.insert(0, "src")
 from datasets import load_dataset
@@ -24,7 +25,10 @@ def load_task(name, n):
     """-> list of (context, [choices], label)."""
     if name == "hellaswag":
         ds = load_dataset("Rowan/hellaswag", split="validation").select(range(n))
-        return [(r["ctx"], [" " + e for e in r["endings"]], int(r["label"])) for r in ds]
+        def _pp(t):                        # lm-eval-harness hellaswag preprocess
+            t = t.strip().replace(" [title]", ". "); t = re.sub(r"\[.*?\]", "", t); return t.replace("  ", " ")
+        return [(_pp(r["activity_label"] + ": " + r["ctx_a"] + " " + r["ctx_b"].capitalize()),
+                 [" " + _pp(e) for e in r["endings"]], int(r["label"])) for r in ds]
     if name == "arc_easy":
         ds = load_dataset("allenai/ai2_arc", "ARC-Easy", split="test").select(range(n))
         return [("Question: " + r["question"] + "\nAnswer:", [" " + t for t in r["choices"]["text"]], r["choices"]["label"].index(r["answerKey"])) for r in ds]
@@ -56,14 +60,18 @@ def loglik(eng, tok, ctx, cont, cache=None, ctx_logit=None):
     return float(lp.gather(1, full[n_ctx:].unsqueeze(1)).sum())
 
 def accuracy(eng, tok, examples):
-    """-> (accuracy, per-example correctness list) so policies can be compared paired."""
-    hits = []
+    """-> (acc, hits, acc_norm, hits_norm).  acc: argmax of raw summed log-likelihood;
+    acc_norm: argmax of log-likelihood / byte length of the continuation (lm-eval's
+    headline metric for HellaSwag/ARC/OBQA).  Per-example correctness kept for both."""
+    hits, hits_n = [], []
     for ctx, choices, label in examples:
         c = tok(ctx, return_tensors="pt").input_ids[0]
         cache = {}; lg_ctx, _ = eng.forward(c, cache)
         scores = [loglik(eng, tok, ctx, ch, cache, lg_ctx[-1]) for ch in choices]
         hits.append(int(max(range(len(scores)), key=lambda j: scores[j]) == label))
-    return sum(hits) / len(hits), hits
+        norm = [s / max(len(ch.encode("utf-8")), 1) for s, ch in zip(scores, choices)]
+        hits_n.append(int(max(range(len(norm)), key=lambda j: norm[j]) == label))
+    return sum(hits) / len(hits), hits, sum(hits_n) / len(hits_n), hits_n
 
 def paired_acc_ci(a, b, B=5000, seed=0):
     """Bootstrap CI of accuracy(a) - accuracy(b) over the same examples."""
@@ -93,10 +101,10 @@ if __name__ == "__main__":
             done = res.get(pol.name, {}).get(task)
             if done and len(done.get("hits", [])) == len(ex):          # resumed from checkpoint
                 hits[pol.name] = done["hits"]; print(f"  {task:<10} {pol.name:<30} acc={done['acc']*100:5.1f}%  (n={len(ex)})  [checkpoint]", flush=True); continue
-            eng = Eng(store, rm.config, policy=pol); acc, h = accuracy(eng, tok, ex); del eng; gc.collect()
-            res.setdefault(pol.name, {})[task] = {"acc": acc, "hits": h}; hits[pol.name] = h
+            eng = Eng(store, rm.config, policy=pol); acc, h, accn, hn = accuracy(eng, tok, ex); del eng; gc.collect()
+            res.setdefault(pol.name, {})[task] = {"acc": acc, "hits": h, "acc_norm": accn, "hits_norm": hn}; hits[pol.name] = h
             json.dump(res, open(CKPT, "w"), indent=1)                    # checkpoint after every policy
-            print(f"  {task:<10} {pol.name:<30} acc={acc*100:5.1f}%  (n={len(ex)})", flush=True)
+            print(f"  {task:<10} {pol.name:<30} acc={acc*100:5.1f}%  acc_norm={accn*100:5.1f}%  (n={len(ex)})", flush=True)
         base = hits[pols[0].name]
         for pol in pols[1:]:
             lo, md, hi = paired_acc_ci(hits[pol.name], base)
