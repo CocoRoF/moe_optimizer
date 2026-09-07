@@ -569,41 +569,56 @@ class MixedPolicy(ExpertPolicy):
         return i, w * keep
 
 
-def mode_selection_pass(engine, ids, scale, choice, target_k: float, seq_len: int = 512) -> dict:
-    """F31. Per layer: fixed per-layer count (static) vs per-token threshold (dynamic)
-    at the same mean k', each using the signal that layer chose; scored by the
-    layer-output error against the full top-k output. {layer: {mode, err_static, err_dynamic}}."""
-    import torch
-    L = engine.L; ks = int(round(target_k)); out = {}
-    err_s = {l: [] for l in range(L)}; err_d = {l: [] for l in range(L)}
-    n = ids.numel() // seq_len
-    for i in range(n):
-        seq = ids[i * seq_len:(i + 1) * seq_len]
-        cache = {}; h = engine.embed[seq]; cos, sin = engine._rope(seq.numel(), 0)
-        for l in range(L):
-            x, probs, idx, w, ys, h_attn = engine._layer_probe(l, h, cos, sin, cache)
-            renorm = getattr(engine, "renorm", False) is True
-            w_eff = w / w.sum(-1, keepdim=True).clamp_min(1e-12) if renorm else w
-            full = (ys * w_eff.unsqueeze(-1)).sum(1)
-            c = w * scale[l][idx] if (choice[l] is True or choice[l] == "contribution") else w
-            order = c.argsort(-1, descending=True)
-            keep_s = torch.zeros_like(w, dtype=torch.bool).scatter(1, order[:, :ks], True)
-            c_sorted = c.gather(1, order); share = (c_sorted / c_sorted.sum(-1, keepdim=True).clamp_min(1e-12)).cumsum(-1)
-            lo, hi = 0.0, 1.0
-            for _ in range(30):
-                mid = 0.5 * (lo + hi)
-                kt = torch.cat([torch.ones_like(share[:, :1], dtype=torch.bool), share[:, :-1] < 1 - mid], 1).sum(1).float().mean()
-                if kt > target_k: lo = mid
-                else: hi = mid
-            keep_sorted = torch.cat([torch.ones_like(share[:, :1], dtype=torch.bool), share[:, :-1] < 1 - 0.5 * (lo + hi)], 1)
-            keep_d = torch.zeros_like(keep_sorted).scatter(1, order, keep_sorted)
-            for keep, store in ((keep_s, err_s), (keep_d, err_d)):
-                wk = w * keep
-                if renorm: wk = wk / wk.sum(-1, keepdim=True).clamp_min(1e-12)
-                store[l].append(float(((ys * wk.unsqueeze(-1)).sum(1) - full).norm() / full.norm().clamp_min(1e-12)))
-            h = h_attn + full
+@torch.no_grad()
+def mode_selection_pass(engine, ids, scale, choice, target_k: float, drops=None) -> dict:
+    """F31 calibration.  Per layer, at the target mean k': is a fixed per-layer
+    count (static) or a per-token cumulative-share threshold (dynamic) better,
+    using the signal that layer chose in F30?  Both are scored by layer-output
+    error against the full top-k output, on the same tokens.  Uses the same
+    oracle-hook mechanism as ``signal_selection_pass``.  Returns
+    {layer: {"mode": "static"|"dynamic", "err_static", "err_dynamic"}}."""
+    L = engine.L; ks = int(round(target_k)); renorm = getattr(engine, "renorm", False) is True
+    acc = {l: {"static": 0.0, "dynamic": 0.0, "n": 0} for l in range(L)}
+    use = {l: (choice.get(l) is True or choice.get(l) == "contribution") for l in range(L)}
+
+    def hook_layer(l, x, idx, w):
+        T, k = idx.shape; ys = torch.zeros((T, k, x.shape[1]), dtype=engine.dtype)
+        for e in idx.unique().tolist():
+            tok, pos = torch.where(idx == e); xe = x[tok]
+            g = xe @ engine.store.expert(Slot(l, "gate"), e).to(engine.dtype).T
+            u = xe @ engine.store.expert(Slot(l, "up"), e).to(engine.dtype).T
+            ys[tok, pos] = (F.silu(g) * u) @ engine.store.expert(Slot(l, "down"), e).to(engine.dtype).T
+        w_eff = w / w.sum(-1, keepdim=True) if renorm else w
+        full = (ys * w_eff.unsqueeze(-1)).sum(1); norm = full.norm(dim=-1).clamp_min(1e-12)
+        c = w * scale[l][idx] if use[l] else w
+        c_sorted, order = c.sort(-1, descending=True)
+        keep_s = torch.zeros_like(w, dtype=torch.bool).scatter(1, order[:, :ks], True)
+        share = (c_sorted / c_sorted.sum(-1, keepdim=True).clamp_min(1e-12)).cumsum(-1)
+        lo, hi = 0.0, 1.0
+        for _ in range(30):                          # tau so that mean kept == target on these tokens
+            mid = 0.5 * (lo + hi)
+            kt = torch.cat([torch.ones_like(share[:, :1], dtype=torch.bool), share[:, :-1] < 1 - mid], 1).sum(1).float().mean()
+            if kt > target_k: lo = mid
+            else: hi = mid
+        keep_sorted = torch.cat([torch.ones_like(share[:, :1], dtype=torch.bool), share[:, :-1] < 1 - 0.5 * (lo + hi)], 1)
+        keep_d = torch.zeros_like(keep_sorted).scatter(1, order, keep_sorted)
+        for name, keep in (("static", keep_s), ("dynamic", keep_d)):
+            wk = w * keep
+            if renorm: wk = wk / wk.sum(-1, keepdim=True).clamp_min(1e-12)
+            acc[l][name] += float((((ys * wk.unsqueeze(-1)).sum(1) - full).norm(dim=-1) / norm).sum())
+        acc[l]["n"] += T
+        return full
+
+    orig = engine.policy; engine.policy = TopKPolicy(engine.k); orig_oracle = engine._oracle_moe
+    def probe(l, x, idx, w, renorm=False): return hook_layer(l, x, idx, w)
+    engine._oracle_moe = probe; engine.oracle_tau = {l: 0.0 for l in range(L)}
+    try:
+        for i in range(ids.numel() // 512): engine.forward(ids[i * 512:(i + 1) * 512])
+    finally:
+        engine._oracle_moe = orig_oracle; engine.oracle_tau = None; engine.policy = orig
+    out = {}
     for l in range(L):
-        es, ed = sum(err_s[l]) / len(err_s[l]), sum(err_d[l]) / len(err_d[l])
+        n = max(acc[l]["n"], 1); es, ed = acc[l]["static"] / n, acc[l]["dynamic"] / n
         out[l] = {"mode": "dynamic" if ed < es else "static", "err_static": es, "err_dynamic": ed}
     return out
 

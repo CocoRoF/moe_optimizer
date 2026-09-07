@@ -388,6 +388,8 @@ Top-4 of 60 routed experts plus an always-on shared expert (d_ff 5632, sigmoid-g
 
 Paired bootstrap (8 sequences): layer-static vs uniform static **−3.5 % [−4.7, −2.4]**; contribution vs static −2.2 % [−3.4, −0.9]; contribution vs score-only −0.3 % [−1.5, +0.8] n.s.; contribution+budget vs layer-static +0.8 % n.s.
 
+**Calibration statistics.** Within-layer CV of output scale 0.280; **r(s, gate weight) = +0.45** (OLMoE +0.17, Qwen3 −0.05). On this model the router already encodes output magnitude, which is why the contribution signal is redundant here (contribution ≈ score-only, n.s.) — consistent with the mechanism: the signal helps where the router does not carry magnitude (OLMoE), is redundant where it does (Qwen1.5-MoE), and is the wrong quantity where norm-ranking itself hurts (Qwen3).
+
 This is the smallest loss per skipped expert of the three models — a quarter of OLMoE's at the same fraction — and the reason is architectural: the shared expert carries a large, always-executed part of each layer's function, so the routed experts are individually less load-bearing. Two consequences the paper must state: (1) on this model the ranking signal barely matters (contribution ≈ score, n.s.) while **per-layer budgets matter a lot** (layer-static is the best rule at 37.5 %); (2) *routed-load* reduction overstates *byte* reduction here, because the shared expert (3 × 5632 × 2048) is read for every token regardless — at top-4 it is roughly half the MoE bytes, so 37.5 % fewer routed loads is ≈ 19 % fewer MoE bytes. The batch-1 decode measurement that reports bytes honestly is queued.
 
 ## Pending (running, in order)
