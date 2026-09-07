@@ -10,7 +10,8 @@ from moe_optimizer.io.checkpoint import ExpertStore, resolve_model
 from moe_optimizer.runtime.stream import TopKPolicy, ContributionPolicy, LayerTopKPolicy
 from moe_optimizer.runtime.calibrate import calibrate_taus, allocate_layer_budgets, calibrate_taus_per_layer_target
 MODEL = next((a for a in sys.argv[1:] if "/" in a), "allenai/OLMoE-1B-7B-0924")
-ARGS = [a for a in sys.argv[1:] if "/" not in a]; SHORT = MODEL.split("/")[-1].split("-")[0].lower()
+POL = next((a.split("=", 1)[1].split(",") for a in sys.argv[1:] if a.startswith("--policies=")), None)
+ARGS = [a for a in sys.argv[1:] if "/" not in a and not a.startswith("--")]; SHORT = MODEL.split("/")[-1].split("-")[0].lower()
 N_EX = int(ARGS[0]) if ARGS else 300; TARGET = float(ARGS[1]) if len(ARGS) > 1 else 5.0
 TASKS = ARGS[2].split(",") if len(ARGS) > 2 else ["hellaswag", "arc_easy", "arc_challenge", "openbookqa"]
 def _engine_cls(cfg):
@@ -83,6 +84,7 @@ if __name__ == "__main__":
     CKPT = f"runs/policy_downstream_{SHORT}.ckpt.json"
     res = json.load(open(CKPT)) if os.path.exists(CKPT) else {}
     if res: print(f"resuming from {CKPT}: {sum(len(v) for v in res.values())} (policy, task) results", flush=True)
+    if POL: pols = [p for p in pols if any(p.name.startswith(x) for x in POL)]; print('policies:', [p.name for p in pols], flush=True)
     for task in TASKS:
         try: ex = load_task(task, N_EX)
         except Exception as exc: print(f"  {task}: skipped ({type(exc).__name__}: {str(exc)[:80]})", flush=True); continue
