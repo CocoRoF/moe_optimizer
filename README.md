@@ -74,6 +74,9 @@ tests/                   37 tests: policy exactness, engine round-trips, bootstr
 
 ## History
 
+## Attribution
+This project is derived from and based on the [expert-press](https://github.com/Xiermp/expert-press) architecture by [@Xiermp](https://github.com/Xiermp).
+
 This repository began as a study of training-free *structural* compression of MoE expert tables (Legendre charts, local atlases, neuron codebooks). Twelve pre-registered probes across two models and two metrics found no exploitable redundancy at any granularity, and whitened per-expert SVD at 75 % size raised perplexity ×1.62. That work is preserved in `docs/LOG.md` F1–F12 and `src/moe_optimizer/{geometry,community,factorize,methods,ablation}`; the inference-optimisation line above is what survived.
 
 ## License
